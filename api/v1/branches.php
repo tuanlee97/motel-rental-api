@@ -6,7 +6,7 @@ require_once __DIR__ . '/common.php';
 
 function getBranches() {
     $pdo = getDB();
-
+    $user = verifyJWT(); // Get authenticated user
     // Pagination
     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
@@ -16,10 +16,19 @@ function getBranches() {
     $conditions = [];
     $params = [];
 
-    if (!empty($_GET['owner_id']) && filter_var($_GET['owner_id'], FILTER_VALIDATE_INT)) {
+    if ($user['role'] === 'owner') {
+        $conditions[] = "b.owner_id = ?";
+        $params[] = $user['user_id'];
+    }
+    // Allow admin to filter by owner_id if provided
+    if ($user['role'] === 'admin' && !empty($_GET['owner_id']) && filter_var($_GET['owner_id'], FILTER_VALIDATE_INT)) {
         $conditions[] = "b.owner_id = ?";
         $params[] = $_GET['owner_id'];
     }
+    // if (!empty($_GET['owner_id']) && filter_var($_GET['owner_id'], FILTER_VALIDATE_INT)) {
+    //     $conditions[] = "b.owner_id = ?";
+    //     $params[] = $_GET['owner_id'];
+    // }
 
     // Search
     if (!empty($_GET['search'])) {
@@ -45,9 +54,7 @@ function getBranches() {
     $totalPages = ceil($totalRecords / $limit);
 
     // Query data with pagination
-    $query .= " LIMIT ? OFFSET ?";
-    $params[] = $limit;
-    $params[] = $offset;
+    $query .= " LIMIT $limit OFFSET $offset"; 
 
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);

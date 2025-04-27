@@ -62,9 +62,7 @@ function getRooms() {
     $totalPages = ceil($totalRecords / $limit);
 
     // Truy vấn dữ liệu với phân trang
-    $query .= " LIMIT ? OFFSET ?";
-    $params[] = $limit;
-    $params[] = $offset;
+    $query .= " LIMIT $limit OFFSET $offset"; 
 
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);

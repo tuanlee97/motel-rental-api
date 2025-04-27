@@ -30,7 +30,7 @@ function getClientIp() {
 }
 
 function checkRateLimit($ip) {
-    $cacheFile = '../cache/rate_limit.json';
+    $cacheFile = __DIR__ . '/../cache/rate_limit.json';
     $limit = 100; // 100 request/giờ
     $window = 3600; // 1 giờ
 

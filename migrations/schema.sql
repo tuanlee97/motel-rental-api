@@ -259,6 +259,7 @@ CREATE TABLE IF NOT EXISTS room_status_history (
     status ENUM('available', 'occupied', 'maintenance') NOT NULL,
     change_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reason VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
     INDEX idx_room_status_history_room_date (room_id, change_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

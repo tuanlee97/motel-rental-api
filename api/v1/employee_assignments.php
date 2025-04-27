@@ -11,7 +11,7 @@ function getEmployeeAssignments() {
     $params = [];
 
     if (!empty($_GET['user_id']) && filter_var($_GET['user_id'], FILTER_VALIDATE_INT)) {
-        $conditions[] = "ea.user_id = ?";
+        $conditions[] = "ea.employee_id = ?";
         $params[] = $_GET['user_id'];
     }
     if (!empty($_GET['branch_id']) && filter_var($_GET['branch_id'], FILTER_VALIDATE_INT)) {
@@ -29,7 +29,7 @@ function getEmployeeAssignments() {
     $query = "
         SELECT ea.*, u.name AS employee_name, b.name AS branch_name
         FROM employee_assignments ea
-        LEFT JOIN users u ON ea.user_id = u.id
+        LEFT JOIN users u ON ea.employee_id = u.id
         LEFT JOIN branches b ON ea.branch_id = b.id
         $whereClause
     ";
@@ -39,9 +39,7 @@ function getEmployeeAssignments() {
     $totalRecords = $countStmt->fetchColumn();
     $totalPages = ceil($totalRecords / $limit);
 
-    $query .= " LIMIT ? OFFSET ?";
-    $params[] = $limit;
-    $params[] = $offset;
+    $query .= " LIMIT $limit OFFSET $offset"; 
 
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);

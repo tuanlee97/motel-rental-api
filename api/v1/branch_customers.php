@@ -3,6 +3,7 @@ require_once __DIR__ . '/common.php';
 
 function getBranchCustomers() {
     $pdo = getDB();
+    $user = verifyJWT();
     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
@@ -10,6 +11,18 @@ function getBranchCustomers() {
     $conditions = [];
     $params = [];
 
+    // Role-based access control
+    if ($user['role'] === 'owner') {
+        // Owners only see customers from their branches
+        $conditions[] = "b.owner_id = ?";
+        $params[] = $user['user_id'];
+    }
+    // Admins can filter by owner_id if provided
+    if ($user['role'] === 'admin' && !empty($_GET['owner_id']) && filter_var($_GET['owner_id'], FILTER_VALIDATE_INT)) {
+        $conditions[] = "b.owner_id = ?";
+        $params[] = $_GET['owner_id'];
+    }
+    // Additional filters
     if (!empty($_GET['branch_id']) && filter_var($_GET['branch_id'], FILTER_VALIDATE_INT)) {
         $conditions[] = "bc.branch_id = ?";
         $params[] = $_GET['branch_id'];
@@ -19,12 +32,14 @@ function getBranchCustomers() {
         $params[] = $_GET['user_id'];
     }
 
+    // Search by customer name
     if (!empty($_GET['search'])) {
         $search = '%' . sanitizeInput($_GET['search']) . '%';
         $conditions[] = "u.name LIKE ?";
         $params[] = $search;
     }
 
+    // Build query
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
         SELECT bc.*, u.name AS customer_name, b.name AS branch_name

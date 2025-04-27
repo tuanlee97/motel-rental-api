@@ -9,7 +9,7 @@ function handleApiRequest($method, $uri) {
 
     $endpoint = preg_replace('#^/api/v1/#', '', $uri);
     $endpoint = rtrim($endpoint, '/');
-
+    //error_log("Processed Endpoint: '$endpoint'"); // Log the exact endpoint
     $routes = [
         // Users
         'GET:users' => ['file' => '../api/v1/users.php', 'handler' => 'getUsers', 'middleware' => 'auth:admin'],
@@ -176,7 +176,9 @@ function handleApiRequest($method, $uri) {
     foreach ($routes as $route => $config) {
         list($routeMethod, $routePattern) = explode(':', $route);
         $pattern = '#^' . $routePattern . '$#';
+        //error_log("Checking pattern: $pattern against endpoint: $endpoint"); // Log pattern and endpoint
         if ($method === $routeMethod && preg_match($pattern, $endpoint)) {
+            error_log("Matched route: $route");
             try {
                 if ($config['middleware'] === 'non-auth') {
                     nonAuthMiddleware();
@@ -184,8 +186,15 @@ function handleApiRequest($method, $uri) {
                     $roles = explode(':', $config['middleware'])[1];
                     authMiddleware($roles);
                 }
+                $absolutePath = realpath(__DIR__ . '/' . $config['file']);
+                error_log("Loading file: $absolutePath");
+                if ($absolutePath === false) {
+                    responseJson(['status' => 'error', 'message' => 'Không tìm thấy file handler'], 500);
+                    logError("Không tìm thấy file: " . __DIR__ . '/' . $config['file']);
+                    return;
+                }
+                require_once $absolutePath;
 
-                require_once $config['file'];
                 if (function_exists($config['handler'])) {
                     call_user_func($config['handler']);
                 } else {
@@ -196,13 +205,13 @@ function handleApiRequest($method, $uri) {
                 responseJson(['status' => 'error', 'message' => 'Internal server error'], 500);
             }
             return;
+        } else {
+            error_log("No match for route: $routeMethod:$routePattern"); // Log non-matching routes
         }
     }
 
     responseJson(['status' => 'error', 'message' => 'Endpoint not found'], 404);
 }
 
-$method = $_SERVER['REQUEST_METHOD'];
-$uri = $_SERVER['REQUEST_URI'];
-handleApiRequest($method, $uri);
+
 ?>

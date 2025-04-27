@@ -41,26 +41,53 @@ function getUsers() {
         SELECT u.id, u.username, u.name, u.email, u.role, u.created_at
         FROM users u
         LEFT JOIN branch_customers bc ON u.id = bc.user_id
-        LEFT JOIN employee_assignments ea ON u.id = ea.user_id
+        LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
         $whereClause
         GROUP BY u.id
+        LIMIT $limit OFFSET $offset
     ";
 
-    // Đếm tổng số bản ghi
-    $countStmt = $pdo->prepare("SELECT COUNT(DISTINCT u.id) FROM users u LEFT JOIN branch_customers bc ON u.id = bc.user_id LEFT JOIN employee_assignments ea ON u.id = ea.user_id $whereClause");
-    $countStmt->execute($params);
-    $totalRecords = $countStmt->fetchColumn();
-    $totalPages = ceil($totalRecords / $limit);
+    try {
+        // Đếm tổng số bản ghi
+        $countStmt = $pdo->prepare("SELECT COUNT(DISTINCT u.id) FROM users u LEFT JOIN branch_customers bc ON u.id = bc.user_id LEFT JOIN employee_assignments ea ON u.id = ea.employee_id $whereClause");
+        $countStmt->execute($params);
+        $totalRecords = $countStmt->fetchColumn();
+        error_log("Total Records: $totalRecords");
+        $totalPages = ceil($totalRecords / $limit);
+        error_log("Total Pages: $totalPages");
+    
+        // Truy vấn dữ liệu với phân trang
+        if ($limit < 1 || $offset < 0) {
+            throw new Exception("Invalid pagination parameters");
+        }
 
-    // Truy vấn dữ liệu với phân trang
-    $query .= " LIMIT ? OFFSET ?";
-    $params[] = $limit;
-    $params[] = $offset;
+        $stmt = $pdo->prepare($query);
+        if (!$stmt) {
+            throw new PDOException("Failed to prepare query: " . implode(", ", $pdo->errorInfo()));
+        }
 
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $users = $stmt->fetchAll();
+        error_log("Final Query: $query");
+        error_log("Params: " . json_encode($params)); // Log parameters for debugging
+        $stmt->execute($params);
+        $users = $stmt->fetchAll(PDO::FETCH_ASSOC); // Explicitly use FETCH_ASSOC for clarity
+        error_log("Users: " . json_encode($users)); // Log as JSON to avoid array-to-string issues
+    } catch (PDOException $e) {
+        error_log("PDO Error: " . $e->getMessage());
+        responseJson([
+            'status' => 'error',
+            'message' => 'Database error: ' . $e->getMessage()
+        ], 500);
+        return;
+    } catch (Exception $e) {
+        error_log("General Error: " . $e->getMessage());
+        responseJson([
+            'status' => 'error',
+            'message' => 'Unexpected error: ' . $e->getMessage()
+        ], 500);
+        return;
+    }
 
+    // Proceed with response
     responseJson([
         'status' => 'success',
         'data' => $users,

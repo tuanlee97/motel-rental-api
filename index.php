@@ -27,10 +27,10 @@ $requestMethod = $_SERVER['REQUEST_METHOD'];
 
 // Chuẩn hóa URI
 $basePath = parse_url(getBasePath(), PHP_URL_PATH); // Chỉ lấy phần path
-error_log("BasePath: $basePath");
+//error_log("BasePath: $basePath");
 $requestUri = str_replace($basePath, '', $requestUri);
 $requestUri = '/' . ltrim($requestUri, '/'); // Đảm bảo có dấu /
-error_log("Normalized Request URI: $requestUri");
+//error_log("Normalized Request URI: $requestUri");
 
 // Nếu là request API (/api/v1/...)
 if (preg_match('#^/api/v1/#', $requestUri)) {

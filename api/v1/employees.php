@@ -29,20 +29,18 @@ function getEmployees() {
     $query = "
         SELECT u.id, u.username, u.name, u.email, u.created_at, ea.branch_id, b.name AS branch_name
         FROM users u
-        LEFT JOIN employee_assignments ea ON u.id = ea.user_id
+        LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
         LEFT JOIN branches b ON ea.branch_id = b.id
         $whereClause
         GROUP BY u.id
     ";
 
-    $countStmt = $pdo->prepare("SELECT COUNT(DISTINCT u.id) FROM users u LEFT JOIN employee_assignments ea ON u.id = ea.user_id $whereClause");
+    $countStmt = $pdo->prepare("SELECT COUNT(DISTINCT u.id) FROM users u LEFT JOIN employee_assignments ea ON u.id = ea.employee_id $whereClause");
     $countStmt->execute($params);
     $totalRecords = $countStmt->fetchColumn();
     $totalPages = ceil($totalRecords / $limit);
 
-    $query .= " LIMIT ? OFFSET ?";
-    $params[] = $limit;
-    $params[] = $offset;
+    $query .= " LIMIT $limit OFFSET $offset"; 
 
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
