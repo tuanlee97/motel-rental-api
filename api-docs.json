@@ -1,0 +1,301 @@
+{
+    "name": "Motel Rental API",
+    "version": "1.0.0",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/v1/register",
+        "description": "Đăng ký bằng email/mật khẩu",
+        "middleware": "non-auth",
+        "body": {
+          "username": "string",
+          "email": "string",
+          "password": "string",
+          "name": "string (optional)",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "data": { "token": "string", "user_id": "integer" }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/register/google",
+        "description": "Đăng ký/đăng nhập bằng Google",
+        "middleware": "non-auth",
+        "body": { "token": "string" },
+        "response": {
+          "status": "success",
+          "data": { "token": "string", "user_id": "integer" }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/branches",
+        "description": "Lấy danh sách chi nhánh",
+        "middleware": "auth:admin,owner",
+        "response": {
+          "status": "success",
+          "data": [{ "id": "integer", "name": "string", "address": "string" }]
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/branches",
+        "description": "Tạo chi nhánh",
+        "middleware": "auth:owner",
+        "body": {
+          "name": "string",
+          "address": "string",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "data": { "branch_id": "integer" }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/rooms",
+        "description": "Lấy danh sách phòng",
+        "middleware": null,
+        "response": {
+          "status": "success",
+          "data": [{ "id": "integer", "name": "string", "price": "float" }]
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/rooms",
+        "description": "Tạo phòng",
+        "middleware": "auth:owner",
+        "body": {
+          "branch_id": "integer",
+          "type_id": "integer",
+          "name": "string",
+          "price": "float",
+          "status": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "data": { "room_id": "integer" }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/login",
+        "description": "Đăng nhập bằng email/mật khẩu",
+        "middleware": "non-auth",
+        "body": {
+          "email": "string",
+          "password": "string"
+        },
+        "response": {
+          "status": "success",
+          "data": { "token": "string", "user_id": "integer" }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/logout",
+        "description": "Đăng xuất (hủy token)",
+        "middleware": "auth:admin,owner,employee,customer",
+        "headers": { "Authorization": "Bearer <token>" },
+        "response": {
+          "status": "success",
+          "message": "Đăng xuất thành công"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/employees",
+        "description": "Tạo nhân viên",
+        "middleware": "auth:admin,owner",
+        "body": {
+          "username": "string",
+          "email": "string",
+          "password": "string",
+          "name": "string (optional)",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "data": { "token": "string", "user_id": "integer" }
+        }
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/users/{id}",
+        "description": "Cập nhật toàn bộ thông tin user",
+        "middleware": "auth:admin",
+        "body": {
+          "username": "string",
+          "email": "string",
+          "role": "string",
+          "password": "string (optional)",
+          "name": "string (optional)",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "message": "Cập nhật user thành công"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/users/{id}",
+        "description": "Cập nhật một phần thông tin user",
+        "middleware": "auth:admin,owner,employee,customer",
+        "body": {
+          "username": "string (optional)",
+          "email": "string (optional)",
+          "password": "string (optional)",
+          "name": "string (optional)",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "message": "Cập nhật user thành công"
+        }
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/users/{id}",
+        "description": "Xóa user",
+        "middleware": "auth:admin",
+        "response": {
+          "status": "success",
+          "message": "Xóa user thành công"
+        }
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/branches/{id}",
+        "description": "Cập nhật toàn bộ chi nhánh",
+        "middleware": "auth:owner",
+        "body": {
+          "name": "string",
+          "address": "string",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "message": "Cập nhật chi nhánh thành công"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/branches/{id}",
+        "description": "Cập nhật một phần chi nhánh",
+        "middleware": "auth:owner",
+        "body": {
+          "name": "string (optional)",
+          "address": "string (optional)",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "message": "Cập nhật chi nhánh thành công"
+        }
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/branches/{id}",
+        "description": "Xóa chi nhánh",
+        "middleware": "auth:owner",
+        "response": {
+          "status": "success",
+          "message": "Xóa chi nhánh thành công"
+        }
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/rooms/{id}",
+        "description": "Cập nhật toàn bộ phòng",
+        "middleware": "auth:owner",
+        "body": {
+          "branch_id": "integer",
+          "type_id": "integer",
+          "name": "string",
+          "price": "float",
+          "status": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "message": "Cập nhật phòng thành công"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/rooms/{id}",
+        "description": "Cập nhật một phần phòng",
+        "middleware": "auth:owner",
+        "body": {
+          "branch_id": "integer (optional)",
+          "type_id": "integer (optional)",
+          "name": "string (optional)",
+          "price": "float (optional)",
+          "status": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "message": "Cập nhật phòng thành công"
+        }
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/rooms/{id}",
+        "description": "Xóa phòng",
+        "middleware": "auth:owner",
+        "response": {
+          "status": "success",
+          "message": "Xóa phòng thành công"
+        }
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/employees/{id}",
+        "description": "Cập nhật toàn bộ nhân viên",
+        "middleware": "auth:admin,owner",
+        "body": {
+          "username": "string",
+          "email": "string",
+          "password": "string (optional)",
+          "name": "string (optional)",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "message": "Cập nhật nhân viên thành công"
+        }
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/employees/{id}",
+        "description": "Cập nhật một phần nhân viên",
+        "middleware": "auth:admin,owner",
+        "body": {
+          "username": "string (optional)",
+          "email": "string (optional)",
+          "password": "string (optional)",
+          "name": "string (optional)",
+          "phone": "string (optional)"
+        },
+        "response": {
+          "status": "success",
+          "message": "Cập nhật nhân viên thành công"
+        }
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/employees/{id}",
+        "description": "Xóa nhân viên",
+        "middleware": "auth:admin,owner",
+        "response": {
+          "status": "success",
+          "message": "Xóa nhân viên thành công"
+        }
+      }
+    ]
+  }
