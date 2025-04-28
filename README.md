@@ -153,7 +153,11 @@ Hệ thống này là một giải pháp toàn diện để quản lý nhà tr�
    - Cập nhật `host` trong `api-docs.json` thành domain thực tế.
 
 8. **Xóa thư mục cài đặt**:
+
    - Xóa `[ROOT]/install/` qua FTP để tăng bảo mật.
+
+9. **Xóa thư mục cài đặt**:
+   - Xóa `[ROOT]/config/`: copy `app.php.example` thành `app.php` và thiết lập các thông số.
 
 ---
 

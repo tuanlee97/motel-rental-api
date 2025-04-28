@@ -1,0 +1,6 @@
+<?php
+return array (
+  'YOUR_GOOGLE_CLIENT_ID' => 'YOUR_GOOGLE_CLIENT_ID',
+  'SECRET_KEY' => 'SECRET_KEY',
+);
+?>
