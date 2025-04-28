@@ -1,6 +1,9 @@
 <?php
+
+$app = require_once __DIR__ . '../../config/app.php';
+
 function generateJWT($userId, $role) {
-    $secret = 'motel_rental_api_secret_key';
+    $secret = $app['SECRET_KEY'];
     $payload = base64_encode(json_encode([
         'user_id' => $userId,
         'role' => $role,
@@ -19,7 +22,7 @@ function verifyJWT() {
 
     $token = $matches[1];
     list($payload, $signature) = explode('.', $token);
-    $secret = 'motel_rental_api_secret_key';
+    $secret = $app['SECRET_KEY'];
     $expectedSignature = hash_hmac('sha256', $payload, $secret);
 
     if ($signature !== $expectedSignature) {
@@ -57,7 +60,8 @@ function nonAuthMiddleware() {
 }
 
 function verifyGoogleToken($token) {
-    $clientId = 'YOUR_GOOGLE_CLIENT_ID'; // Thay bằng Google Client ID thực tế
+    $app = require __DIR__ . '/../config/app.php';
+    $clientId = $app['YOUR_GOOGLE_CLIENT_ID'];
     $url = "https://oauth2.googleapis.com/tokeninfo?id_token=$token";
     $response = file_get_contents($url);
     $data = json_decode($response, true);

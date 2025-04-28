@@ -52,13 +52,34 @@ if (preg_match('#^/api/v1/#', $requestUri)) {
 // Phục vụ ReactJS bundle
 $reactIndex = 'dist/index.html';
 if (file_exists($reactIndex)) {
-    header('Content-Type: text/html');
-    $content = file_get_contents($reactIndex);
-    $baseUrl = rtrim(getBasePath(), '/') . '/api/v1/';
-    $rootUrl = rtrim(getBasePath(), '/');
-    $script = "<script>window.APP_CONFIG = { baseUrl: '$baseUrl', rootUrl: '$rootUrl' };</script>";
-    $content = str_replace('</head>', $script . '</head>', $content);
-    echo $content;
+    $distDir = __DIR__ . '/dist'; // Đặt đúng đường dẫn thư mục dist
+    $requestFile = $distDir . $requestUri; // Xử lý theo URI yêu cầu
+    
+    // Xử lý các file tĩnh (bao gồm /assets/...)
+    if (file_exists($requestFile) && !is_dir($requestFile)) {
+        $mimeTypes = [
+            '.html' => 'text/html',
+            '.css' => 'text/css',
+            '.js' => 'application/javascript',
+            '.svg' => 'image/svg+xml',
+            '.png' => 'image/png',
+            '.jpg' => 'image/jpeg',
+            '.jpeg' => 'image/jpeg',
+        ];
+        $ext = strtolower(pathinfo($requestFile, PATHINFO_EXTENSION));
+        $mimeType = $mimeTypes['.' . $ext] ?? 'application/octet-stream';
+        header("Content-Type: $mimeType");
+        readfile($requestFile);
+        exit;
+    }
+    
+    // Xử lý tệp index.html từ dist
+    $distPath = $distDir . '/index.html';
+    if (file_exists($distPath)) {
+        header('Content-Type: text/html');
+        readfile($distPath);
+        exit;
+    }
 } else {
     http_response_code(404);
     logError('Không tìm thấy file dist/index.html');

@@ -1,11 +1,12 @@
 #Thư mục và file nhạy cảm
 /config/database.php
 /config/installed.php
+/config/app.php
 /logs/*
 !/logs/.gitkeep
 /cache/*
-/dist/
-
+/dist/*
+!/dist/.gitkeep
 #File tạm và IDE
 *.log
 *.cache
