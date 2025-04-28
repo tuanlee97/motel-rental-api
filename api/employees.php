@@ -1,8 +1,8 @@
 <?php
-require_once __DIR__ . '/../../core/database.php';
-require_once __DIR__ . '/../../core/helpers.php';
-require_once __DIR__ . '/../../core/auth.php';
-require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/../core/database.php';
+require_once __DIR__ . '/../core/helpers.php';
+require_once __DIR__ . '/../core/auth.php';
+require_once __DIR__ . '/utils/common.php';
 
 function getEmployees() {
     $pdo = getDB();
@@ -75,9 +75,11 @@ function createEmployee() {
         $stmt->execute([$userData['username'], $userData['name'], $userData['email'], $password, $userData['phone']]);
 
         $userId = $pdo->lastInsertId();
-        $token = generateJWT($userId, 'employee');
+        $jwt = generateJWT($userId, 'employee');
+        $token = $jwt['token'];
+        $userData['exp'] = $jwt['exp'] ?? null;
         createNotification($pdo, $userId, "Chào mừng {$userData['username']} đã được thêm làm nhân viên!");
-        responseJson(['status' => 'success', 'data' => ['token' => $token, 'user_id' => $userId]]);
+        responseJson(['status' => 'success', 'data' => ['token' => $token, 'user' => $userData]]);
     } catch (Exception $e) {
         logError('Lỗi tạo nhân viên: ' . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);

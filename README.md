@@ -111,7 +111,7 @@ Hệ thống này là một giải pháp toàn diện để quản lý nhà tr�
 - **Quyền thư mục**: `config/`, `logs/`, `cache/` cần quyền ghi (chmod 775 hoặc 777).
   sudo chmod -R 775 /var/www/html/motel-rental-api/logs
   sudo chmod -R 775 /var/www/html/motel-rental-api/configs
-
+  sudo chown -R www-data:www-data /var/www/html/motel-rental-api/cache
 - **Trình duyệt**: Chrome, Firefox, hoặc bất kỳ trình duyệt hiện đại nào.
 
 ---
@@ -156,8 +156,9 @@ Hệ thống này là một giải pháp toàn diện để quản lý nhà tr�
 
    - Xóa `[ROOT]/install/` qua FTP để tăng bảo mật.
 
-9. **Xóa thư mục cài đặt**:
-   - Xóa `[ROOT]/config/`: copy `app.php.example` thành `app.php` và thiết lập các thông số.
+9. **Copy thư mục cài đặt**:
+   - Trong `[ROOT]/config/`: copy `app.php.example` thành `app.php` và thiết lập các thông số.
+   - Trong `[ROOT]/cache/`: copy `rate_limit.json.example` thành `rate_limit.json`
 
 ---
 

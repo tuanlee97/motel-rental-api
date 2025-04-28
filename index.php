@@ -5,11 +5,12 @@ ini_set('error_log', 'logs/php_errors.log');
 
 require_once 'core/helpers.php';
 
-// Bắt OPTIONS request
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Max-Age: 86400');
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Authorization, Content-Type');
     http_response_code(200);
     exit;
 }
@@ -32,8 +33,8 @@ $requestUri = str_replace($basePath, '', $requestUri);
 $requestUri = '/' . ltrim($requestUri, '/'); // Đảm bảo có dấu /
 //error_log("Normalized Request URI: $requestUri");
 
-// Nếu là request API (/api/v1/...)
-if (preg_match('#^/api/v1/#', $requestUri)) {
+// Nếu là request API (/api/...)
+if (preg_match('#^/api/#', $requestUri)) {
     error_log("API route matched: $requestMethod $requestUri");
     require_once 'core/router.php';
     try {

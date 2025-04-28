@@ -1,8 +1,8 @@
 <?php
-require_once __DIR__ . '/../../core/database.php';
-require_once __DIR__ . '/../../core/helpers.php';
-require_once __DIR__ . '/../../core/auth.php';
-require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/../core/database.php';
+require_once __DIR__ . '/../core/helpers.php';
+require_once __DIR__ . '/../core/auth.php';
+require_once __DIR__ . '/utils/common.php';
 
 function getUsers() {
     $pdo = getDB();
@@ -38,7 +38,7 @@ function getUsers() {
     // Xây dựng truy vấn
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
-        SELECT u.id, u.username, u.name, u.email, u.role, u.created_at
+        SELECT u.id, u.username, u.name, u.email, u.role, u.created_at, u.phone, u.status
         FROM users u
         LEFT JOIN branch_customers bc ON u.id = bc.user_id
         LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
@@ -118,9 +118,10 @@ function createUser() {
         $stmt->execute([$userData['username'], $userData['name'], $userData['email'], $password, $userData['phone'], $role]);
 
         $userId = $pdo->lastInsertId();
-        $token = generateJWT($userId, $role);
+        $jwt = generateJWT($userId, $role);
+        $token = $jwt['token'];
         createNotification($pdo, $userId, "Chào mừng {$userData['username']} đã tham gia hệ thống!");
-        responseJson(['status' => 'success', 'data' => ['token' => $token, 'user_id' => $userId]]);
+        responseJson(['status' => 'success', 'data' => ['user' => $userData]]);
     } catch (Exception $e) {
         logError('Lỗi tạo user: ' . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
@@ -251,9 +252,9 @@ function registerUser() {
         $stmt->execute([$userData['username'], $userData['name'], $userData['email'], $password, $userData['phone']]);
 
         $userId = $pdo->lastInsertId();
-        $token = generateJWT($userId, 'customer');
+        $jwt = generateJWT($userId, 'customer');
         createNotification($pdo, $userId, "Chào mừng {$userData['username']} đã đăng ký!");
-        responseJson(['status' => 'success', 'data' => ['token' => $token, 'user_id' => $userId]]);
+        responseJson(['status' => 'success', 'data' => ['user' => $userData]]);
     } catch (Exception $e) {
         logError('Lỗi đăng ký user: ' . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
@@ -283,8 +284,10 @@ function registerGoogleUser() {
                 responseJson(['status' => 'error', 'message' => 'Email đã được sử dụng bởi phương thức khác'], 409);
             }
             $userId = $user['id'];
-            $token = generateJWT($userId, 'customer');
-            responseJson(['status' => 'success', 'data' => ['token' => $token, 'user_id' => $userId]]);
+            $jwt = generateJWT($userId, 'customer');
+            $token = $jwt['token'];
+            $user['exp'] = $jwt['exp'] ?? null;
+            responseJson(['status' => 'success', 'data' => ['token' => $token, 'user' => $user]]);
             return;
         }
 
@@ -295,9 +298,12 @@ function registerGoogleUser() {
         $stmt->execute([$username, $name, $email, '']);
 
         $userId = $pdo->lastInsertId();
-        $token = generateJWT($userId, 'customer');
+
+        $jwt = generateJWT($userId, 'customer');
+        $token = $jwt['token'];
+        $user['exp'] = $jwt['exp'] ?? null;
         createNotification($pdo, $userId, "Chào mừng $username đã đăng ký qua Google!");
-        responseJson(['status' => 'success', 'data' => ['token' => $token, 'user_id' => $userId]]);
+        responseJson(['status' => 'success', 'data' => ['token' => $token, 'user' => $user]]);
     } catch (Exception $e) {
         logError('Lỗi đăng ký Google user: ' . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);

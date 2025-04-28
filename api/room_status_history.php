@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/utils/common.php';
 
 function validateDate($date) {
     $d = DateTime::createFromFormat('Y-m-d H:i:s', $date);

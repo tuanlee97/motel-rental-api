@@ -1,20 +1,27 @@
 <?php
 
-$app = require_once __DIR__ . '../../config/app.php';
+
 
 function generateJWT($userId, $role) {
+    $app = require __DIR__ . '/../config/app.php';
     $secret = $app['SECRET_KEY'];
+    $exp = time() + 3600;
+
     $payload = base64_encode(json_encode([
         'user_id' => $userId,
         'role' => $role,
-        'exp' => time() + 3600
+        'exp' => $exp
     ]));
     $signature = hash_hmac('sha256', $payload, $secret);
-    return "$payload.$signature";
+    return [
+        'exp' => $exp,
+        'token' => "$payload.$signature"
+    ];
 }
 
 function verifyJWT() {
     $headers = getallheaders();
+    $app = require __DIR__ . '/../config/app.php';
     $authHeader = $headers['Authorization'] ?? '';
     if (!preg_match('/Bearer (.+)/', $authHeader, $matches)) {
         responseJson(['status' => 'error', 'message' => 'Thiếu header Authorization'], 401);

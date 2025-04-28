@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/utils/common.php';
 
 function getRoomTypes() {
     $pdo = getDB();

@@ -1,301 +1,1417 @@
 {
-    "name": "Motel Rental API",
-    "version": "1.0.0",
-    "endpoints": [
-      {
-        "method": "POST",
-        "path": "/api/v1/register",
-        "description": "Đăng ký bằng email/mật khẩu",
-        "middleware": "non-auth",
-        "body": {
-          "username": "string",
-          "email": "string",
-          "password": "string",
-          "name": "string (optional)",
-          "phone": "string (optional)"
+  "info": {
+    "_postman_id": "hotel-management-api",
+    "name": "Hotel Management API",
+    "description": "Collection for managing hotel resources including users, branches, contracts, payments, notifications, employees, tickets, services, maintenance requests, and reviews.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=10&role=customer&search=john",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "role",
+                  "value": "customer",
+                  "description": "Filter by role (admin, owner, employee, customer)"
+                },
+                {
+                  "key": "search",
+                  "value": "john",
+                  "description": "Search by username, name, or email"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of users."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"username\":\"johndoe\",\"name\":\"John Doe\",\"email\":\"john.doe@example.com\",\"role\":\"customer\"}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "data": { "token": "string", "user_id": "integer" }
-        }
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/register/google",
-        "description": "Đăng ký/đăng nhập bằng Google",
-        "middleware": "non-auth",
-        "body": { "token": "string" },
-        "response": {
-          "status": "success",
-          "data": { "token": "string", "user_id": "integer" }
-        }
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/branches",
-        "description": "Lấy danh sách chi nhánh",
-        "middleware": "auth:admin,owner",
-        "response": {
-          "status": "success",
-          "data": [{ "id": "integer", "name": "string", "address": "string" }]
-        }
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/branches",
-        "description": "Tạo chi nhánh",
-        "middleware": "auth:owner",
-        "body": {
-          "name": "string",
-          "address": "string",
-          "phone": "string (optional)"
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            },
+            "description": "Retrieve details of a specific user by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":{\"id\":1,\"username\":\"johndoe\",\"name\":\"John Doe\",\"email\":\"john.doe@example.com\",\"role\":\"customer\"}}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "data": { "branch_id": "integer" }
-        }
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/rooms",
-        "description": "Lấy danh sách phòng",
-        "middleware": null,
-        "response": {
-          "status": "success",
-          "data": [{ "id": "integer", "name": "string", "price": "float" }]
-        }
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/rooms",
-        "description": "Tạo phòng",
-        "middleware": "auth:owner",
-        "body": {
-          "branch_id": "integer",
-          "type_id": "integer",
-          "name": "string",
-          "price": "float",
-          "status": "string (optional)"
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"janedoe\",\"name\":\"Jane Doe\",\"email\":\"jane.doe@example.com\",\"password\":\"secure123\",\"role\":\"customer\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "Create a new user."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"User created successfully\"}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "data": { "room_id": "integer" }
-        }
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/login",
-        "description": "Đăng nhập bằng email/mật khẩu",
-        "middleware": "non-auth",
-        "body": {
-          "email": "string",
-          "password": "string"
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"janedoe\",\"name\":\"Jane Doe Updated\",\"email\":\"jane.doe@example.com\",\"role\":\"customer\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            },
+            "description": "Update all details of a user by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"User updated successfully\"}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "data": { "token": "string", "user_id": "integer" }
-        }
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/logout",
-        "description": "Đăng xuất (hủy token)",
-        "middleware": "auth:admin,owner,employee,customer",
-        "headers": { "Authorization": "Bearer <token>" },
-        "response": {
-          "status": "success",
-          "message": "Đăng xuất thành công"
-        }
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/employees",
-        "description": "Tạo nhân viên",
-        "middleware": "auth:admin,owner",
-        "body": {
-          "username": "string",
-          "email": "string",
-          "password": "string",
-          "name": "string (optional)",
-          "phone": "string (optional)"
+        {
+          "name": "Patch User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Jane Doe Patched\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            },
+            "description": "Partially update a user by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"User updated successfully\"}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "data": { "token": "string", "user_id": "integer" }
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            },
+            "description": "Delete a user by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"User deleted successfully\"}"
+            }
+          ]
         }
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/users/{id}",
-        "description": "Cập nhật toàn bộ thông tin user",
-        "middleware": "auth:admin",
-        "body": {
-          "username": "string",
-          "email": "string",
-          "role": "string",
-          "password": "string (optional)",
-          "name": "string (optional)",
-          "phone": "string (optional)"
+      ]
+    },
+    {
+      "name": "Branches",
+      "item": [
+        {
+          "name": "Get Branches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/branches?page=1&limit=10&owner_id=1&search=downtown",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "owner_id",
+                  "value": "1",
+                  "description": "Filter by owner ID"
+                },
+                {
+                  "key": "search",
+                  "value": "downtown",
+                  "description": "Search by name or address"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of branches."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"name\":\"Downtown Branch\",\"address\":\"123 Main St\",\"owner_id\":1,\"owner_name\":\"Jane Doe\"}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "message": "Cập nhật user thành công"
-        }
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/v1/users/{id}",
-        "description": "Cập nhật một phần thông tin user",
-        "middleware": "auth:admin,owner,employee,customer",
-        "body": {
-          "username": "string (optional)",
-          "email": "string (optional)",
-          "password": "string (optional)",
-          "name": "string (optional)",
-          "phone": "string (optional)"
+        {
+          "name": "Get Branch by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/branches/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                "1"
+              ]
+            },
+            "description": "Retrieve details of a specific branch by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":{\"id\":1,\"name\":\"Downtown Branch\",\"address\":\"123 Main St\",\"owner_id\":1,\"owner_name\":\"Jane Doe\"}}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "message": "Cập nhật user thành công"
-        }
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/users/{id}",
-        "description": "Xóa user",
-        "middleware": "auth:admin",
-        "response": {
-          "status": "success",
-          "message": "Xóa user thành công"
-        }
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/branches/{id}",
-        "description": "Cập nhật toàn bộ chi nhánh",
-        "middleware": "auth:owner",
-        "body": {
-          "name": "string",
-          "address": "string",
-          "phone": "string (optional)"
+        {
+          "name": "Create Branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"New Branch\",\"address\":\"456 Oak St\",\"owner_id\":1}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches"
+              ]
+            },
+            "description": "Create a new branch."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Branch created successfully\"}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "message": "Cập nhật chi nhánh thành công"
-        }
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/v1/branches/{id}",
-        "description": "Cập nhật một phần chi nhánh",
-        "middleware": "auth:owner",
-        "body": {
-          "name": "string (optional)",
-          "address": "string (optional)",
-          "phone": "string (optional)"
+        {
+          "name": "Update Branch",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Updated Branch\",\"address\":\"456 Oak St\",\"owner_id\":1}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/branches/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                "1"
+              ]
+            },
+            "description": "Update all details of a branch by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Branch updated successfully\"}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "message": "Cập nhật chi nhánh thành công"
-        }
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/branches/{id}",
-        "description": "Xóa chi nhánh",
-        "middleware": "auth:owner",
-        "response": {
-          "status": "success",
-          "message": "Xóa chi nhánh thành công"
-        }
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/rooms/{id}",
-        "description": "Cập nhật toàn bộ phòng",
-        "middleware": "auth:owner",
-        "body": {
-          "branch_id": "integer",
-          "type_id": "integer",
-          "name": "string",
-          "price": "float",
-          "status": "string (optional)"
+        {
+          "name": "Patch Branch",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Patched Branch\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/branches/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                "1"
+              ]
+            },
+            "description": "Partially update a branch by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Branch updated successfully\"}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "message": "Cập nhật phòng thành công"
+        {
+          "name": "Delete Branch",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/branches/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                "1"
+              ]
+            },
+            "description": "Delete a branch by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Branch deleted successfully\"}"
+            }
+          ]
         }
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/v1/rooms/{id}",
-        "description": "Cập nhật một phần phòng",
-        "middleware": "auth:owner",
-        "body": {
-          "branch_id": "integer (optional)",
-          "type_id": "integer (optional)",
-          "name": "string (optional)",
-          "price": "float (optional)",
-          "status": "string (optional)"
+      ]
+    },
+    {
+      "name": "Contracts",
+      "item": [
+        {
+          "name": "Get Contracts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/contracts?page=1&limit=10&status=active&user_id=2&search=john",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contracts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "description": "Filter by status (active, expired, cancelled)"
+                },
+                {
+                  "key": "user_id",
+                  "value": "2",
+                  "description": "Filter by user ID"
+                },
+                {
+                  "key": "search",
+                  "value": "john",
+                  "description": "Search by customer name"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of contracts."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"user_id\":2,\"room_id\":3,\"branch_id\":1,\"start_date\":\"2025-01-01\",\"end_date\":\"2025-12-31\",\"price\":1000.00,\"status\":\"active\",\"customer_name\":\"John Doe\"}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "message": "Cập nhật phòng thành công"
-        }
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/rooms/{id}",
-        "description": "Xóa phòng",
-        "middleware": "auth:owner",
-        "response": {
-          "status": "success",
-          "message": "Xóa phòng thành công"
-        }
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/employees/{id}",
-        "description": "Cập nhật toàn bộ nhân viên",
-        "middleware": "auth:admin,owner",
-        "body": {
-          "username": "string",
-          "email": "string",
-          "password": "string (optional)",
-          "name": "string (optional)",
-          "phone": "string (optional)"
+        {
+          "name": "Get Contract by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/contracts/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contracts",
+                "1"
+              ]
+            },
+            "description": "Retrieve details of a specific contract by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":{\"id\":1,\"user_id\":2,\"room_id\":3,\"branch_id\":1,\"start_date\":\"2025-01-01\",\"end_date\":\"2025-12-31\",\"price\":1000.00,\"status\":\"active\",\"customer_name\":\"John Doe\"}}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "message": "Cập nhật nhân viên thành công"
-        }
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/v1/employees/{id}",
-        "description": "Cập nhật một phần nhân viên",
-        "middleware": "auth:admin,owner",
-        "body": {
-          "username": "string (optional)",
-          "email": "string (optional)",
-          "password": "string (optional)",
-          "name": "string (optional)",
-          "phone": "string (optional)"
+        {
+          "name": "Create Contract",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":2,\"room_id\":3,\"branch_id\":1,\"start_date\":\"2025-01-01\",\"end_date\":\"2025-12-31\",\"price\":1000.00,\"status\":\"active\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/contracts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contracts"
+              ]
+            },
+            "description": "Create a new contract."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Contract created successfully\"}"
+            }
+          ]
         },
-        "response": {
-          "status": "success",
-          "message": "Cập nhật nhân viên thành công"
+        {
+          "name": "Update Contract",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":2,\"room_id\":3,\"branch_id\":1,\"start_date\":\"2025-01-01\",\"end_date\":\"2025-12-31\",\"price\":1200.00,\"status\":\"active\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/contracts/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contracts",
+                "1"
+              ]
+            },
+            "description": "Update all details of a contract by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Contract updated successfully\"}"
+            }
+          ]
+        },
+        {
+          "name": "Patch Contract",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"price\":1200.00}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/contracts/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contracts",
+                "1"
+              ]
+            },
+            "description": "Partially update a contract by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Contract updated successfully\"}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Contract",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/contracts/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contracts",
+                "1"
+              ]
+            },
+            "description": "Delete a contract by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Contract deleted successfully\"}"
+            }
+          ]
         }
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/employees/{id}",
-        "description": "Xóa nhân viên",
-        "middleware": "auth:admin,owner",
-        "response": {
-          "status": "success",
-          "message": "Xóa nhân viên thành công"
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Get Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments?page=1&limit=10&contract_id=1&status=completed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "contract_id",
+                  "value": "1",
+                  "description": "Filter by contract ID"
+                },
+                {
+                  "key": "status",
+                  "value": "completed",
+                  "description": "Filter by status (pending, completed, failed)"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of payments."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"contract_id\":1,\"amount\":500.00,\"status\":\"completed\",\"payment_date\":\"2025-01-15\"}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
+        },
+        {
+          "name": "Get Payment by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "1"
+              ]
+            },
+            "description": "Retrieve details of a specific payment by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":{\"id\":1,\"contract_id\":1,\"amount\":500.00,\"status\":\"completed\",\"payment_date\":\"2025-01-15\"}}"
+            }
+          ]
+        },
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"contract_id\":1,\"amount\":500.00,\"status\":\"pending\",\"payment_date\":\"2025-01-15\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "description": "Create a new payment."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Payment created successfully\"}"
+            }
+          ]
+        },
+        {
+          "name": "Update Payment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"contract_id\":1,\"amount\":600.00,\"status\":\"completed\",\"payment_date\":\"2025-01-15\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "1"
+              ]
+            },
+            "description": "Update all details of a payment by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Payment updated successfully\"}"
+            }
+          ]
+        },
+        {
+          "name": "Patch Payment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"completed\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "1"
+              ]
+            },
+            "description": "Partially update a payment by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Payment updated successfully\"}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Payment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "1"
+              ]
+            },
+            "description": "Delete a payment by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Payment deleted successfully\"}"
+            }
+          ]
         }
-      }
-    ]
-  }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications?page=1&limit=10&user_id=1&search=urgent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "user_id",
+                  "value": "1",
+                  "description": "Filter by user ID"
+                },
+                {
+                  "key": "search",
+                  "value": "urgent",
+                  "description": "Search by message content"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of notifications."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"user_id\":1,\"message\":\"Urgent maintenance needed\",\"created_at\":\"2025-01-01T00:00:00Z\"}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
+        },
+        {
+          "name": "Get Notification by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "1"
+              ]
+            },
+            "description": "Retrieve details of a specific notification by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":{\"id\":1,\"user_id\":1,\"message\":\"Urgent maintenance needed\",\"created_at\":\"2025-01-01T00:00:00Z\"}}"
+            }
+          ]
+        },
+        {
+          "name": "Create Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":1,\"message\":\"New notification\",\"created_at\":\"2025-01-01T00:00:00Z\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ]
+            },
+            "description": "Create a new notification."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Notification created successfully\"}"
+            }
+          ]
+        },
+        {
+          "name": "Update Notification",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":1,\"message\":\"Updated notification\",\"created_at\":\"2025-01-01T00:00:00Z\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/notifications/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "1"
+              ]
+            },
+            "description": "Update all details of a notification by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Notification updated successfully\"}"
+            }
+          ]
+        },
+        {
+          "name": "Patch Notification",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"message\":\"Patched notification\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/notifications/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "1"
+              ]
+            },
+            "description": "Partially update a notification by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Notification updated successfully\"}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "1"
+              ]
+            },
+            "description": "Delete a notification by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"message\":\"Notification deleted successfully\"}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Employees",
+      "item": [
+        {
+          "name": "Get Employees",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/employees?page=1&limit=10&branch_id=1&search=john",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "branch_id",
+                  "value": "1",
+                  "description": "Filter by branch ID"
+                },
+                {
+                  "key": "search",
+                  "value": "john",
+                  "description": "Search by name or email"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of employees."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"name\":\"John Smith\",\"email\":\"john.smith@example.com\",\"branch_id\":1}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        {
+          "name": "Get Tickets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/tickets?page=1&limit=10&status=open&search=issue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tickets"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "status",
+                  "value": "open",
+                  "description": "Filter by status (open, in_progress, closed)"
+                },
+                {
+                  "key": "search",
+                  "value": "issue",
+                  "description": "Search by description"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of tickets."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"description\":\"Technical issue\",\"status\":\"open\",\"created_at\":\"2025-01-01T00:00:00Z\"}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Services",
+      "item": [
+        {
+          "name": "Get Services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/services?page=1&limit=10&search=cleaning",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "services"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "search",
+                  "value": "cleaning",
+                  "description": "Search by service name"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of services."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"name\":\"Cleaning Service\",\"price\":50.00}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Maintenance Requests",
+      "item": [
+        {
+          "name": "Get Maintenance Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/maintenance_requests?page=1&limit=10&status=pending&search=repair",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "maintenance_requests"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "status",
+                  "value": "pending",
+                  "description": "Filter by status (pending, in_progress, completed)"
+                },
+                {
+                  "key": "search",
+                  "value": "repair",
+                  "description": "Search by description"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of maintenance requests."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"room_id\":3,\"description\":\"Repair needed\",\"status\":\"pending\",\"priority\":\"high\"}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "Get Reviews",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reviews?page=1&limit=10&branch_id=1&search=good",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reviews"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (default: 10)"
+                },
+                {
+                  "key": "branch_id",
+                  "value": "1",
+                  "description": "Filter by branch ID"
+                },
+                {
+                  "key": "search",
+                  "value": "good",
+                  "description": "Search by comment"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of reviews."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"status\":\"success\",\"data\":[{\"id\":1,\"room_id\":3,\"branch_id\":1,\"rating\":5,\"comment\":\"Good service\"}],\"pagination\":{\"current_page\":1,\"limit\":10,\"total_records\":1,\"total_pages\":1}}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost/motel-rental-api/",
+      "description": "Base URL for the API"
+    }
+  ]
+}
