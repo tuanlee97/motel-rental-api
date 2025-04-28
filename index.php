@@ -61,7 +61,79 @@ if (file_exists($reactIndex)) {
     echo $content;
 } else {
     http_response_code(404);
-    echo 'Không tìm thấy bundle ReactJS. Vui lòng build và copy vào thư mục dist/.';
     logError('Không tìm thấy file dist/index.html');
+       echo <<<HTML
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Ứng dụng chưa sẵn sàng</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f9fafb;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            text-align: center;
+            max-width: 600px;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 42px;
+            color: #ff6f00;
+            margin-bottom: 10px;
+        }
+        p {
+            font-size: 18px;
+            margin-top: 0;
+        }
+        .notice {
+            margin-top: 20px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .button {
+            margin-top: 30px;
+            display: inline-block;
+            background-color: #1976d2;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #1565c0;
+        }
+        small {
+            display: block;
+            margin-top: 20px;
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚧 Ứng dụng chưa sẵn sàng</h1>
+        <p>Có vẻ như giao diện của ứng dụng hiện tại chưa thể phục vụ.</p>
+        <div class="notice">
+            Vui lòng liên hệ <strong>nhà phát triển</strong> để hoàn tất quá trình cài đặt.
+        </div>
+    </div>
+</body>
+</html>
+HTML;
 }
 ?>
