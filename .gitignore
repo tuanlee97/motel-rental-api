@@ -2,6 +2,7 @@
 /config/database.php
 /config/installed.php
 /logs/*
+!/logs/.gitkeep
 /cache/*
 /dist/
 
