@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../core/database.php';
 require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
-
+require_once __DIR__ . '/utils/common.php';
 function getBranches() {
     $pdo = getDB();
     $user = verifyJWT();

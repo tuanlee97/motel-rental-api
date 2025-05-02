@@ -109,8 +109,11 @@ CREATE TABLE IF NOT EXISTS services (
     price DECIMAL(10,2) NOT NULL,
     unit VARCHAR(50) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_deleted TINYINT(1) DEFAULT 0,
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
-    INDEX idx_services_branch_id (branch_id)
+    INDEX idx_services_branch_id (branch_id),
+    INDEX idx_services_is_deleted (is_deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Bảng utility_usage: Lưu thông tin sử dụng dịch vụ

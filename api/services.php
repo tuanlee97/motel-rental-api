@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../core/database.php';
 require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
+require_once __DIR__ . '/utils/common.php';
 
 function getServices() {
     $pdo = getDB();
@@ -15,7 +16,7 @@ function getServices() {
     $offset = ($page - 1) * $limit;
 
     // Điều kiện lọc
-    $conditions = [];
+    $conditions = ['s.is_deleted = 0'];
     $params = [];
 
     // Tìm kiếm
@@ -23,6 +24,13 @@ function getServices() {
         $search = '%' . sanitizeInput($_GET['search']) . '%';
         $conditions[] = "(s.name LIKE ?)";
         $params[] = $search;
+    }
+
+    // Branch ID
+    if (!empty($_GET['branch_id']) && is_numeric($_GET['branch_id'])) {
+        $branch_id = (int)$_GET['branch_id'];
+        $conditions[] = "s.branch_id = ?";
+        $params[] = $branch_id;
     }
 
     // Phân quyền: Chỉ owner thấy dịch vụ của chi nhánh mình
@@ -45,7 +53,7 @@ function getServices() {
         $whereClause
         LIMIT $limit OFFSET $offset
     ";
-
+    error_log("query: " . $query);
     try {
         // Đếm tổng số bản ghi
         $countStmt = $pdo->prepare("SELECT COUNT(*) FROM services s $whereClause");
@@ -58,7 +66,7 @@ function getServices() {
         $stmt->execute($params);
         $services = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
-        logError("Lỗi cơ sở dữ liệu: " . $e->getMessage());
+        error_log("Lỗi cơ sở dữ liệu: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
         return;
     }
@@ -101,7 +109,7 @@ function getServiceById() {
         $stmt = $pdo->prepare("
             SELECT s.id, s.branch_id, s.name, s.price, s.unit, s.created_at
             FROM services s
-            WHERE s.id = ? $condition
+            WHERE s.is_deleted = 0 AND s.id = ? $condition
         ");
         $stmt->execute($params);
         $service = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -113,7 +121,7 @@ function getServiceById() {
 
         responseJson(['data' => $service, 'message' => 'Lấy dịch vụ thành công']);
     } catch (PDOException $e) {
-        logError("Lỗi lấy dịch vụ ID $service_id: " . $e->getMessage());
+        error_log("Lỗi lấy dịch vụ ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -180,7 +188,7 @@ function createService() {
             'message' => 'Tạo dịch vụ thành công'
         ], 201);
     } catch (PDOException $e) {
-        logError("Lỗi tạo dịch vụ: " . $e->getMessage());
+        error_log("Lỗi tạo dịch vụ: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -276,7 +284,7 @@ function updateService() {
             'message' => 'Cập nhật dịch vụ thành công'
         ]);
     } catch (PDOException $e) {
-        logError("Lỗi cập nhật dịch vụ ID $service_id: " . $e->getMessage());
+        error_log("Lỗi cập nhật dịch vụ ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -309,7 +317,7 @@ function deleteService() {
         createNotification($pdo, $user_id, "Dịch vụ ID $service_id đã được xóa.");
         responseJson(['message' => 'Xóa dịch vụ thành công']);
     } catch (PDOException $e) {
-        logError("Lỗi xóa dịch vụ ID $service_id: " . $e->getMessage());
+        error_log("Lỗi xóa dịch vụ ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
