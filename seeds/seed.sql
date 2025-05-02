@@ -1,129 +1,137 @@
--- Seed dữ liệu cho bảng users -- password : 123456
-INSERT INTO users (username, name, email, password, phone, role, status, provider, created_at) VALUES
-('admin01', 'Nguyễn Văn An', 'admin01@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0912345678', 'admin', 'active', 'email', NOW()),
-('owner01', 'Trần Thị Bình', 'owner01@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0987654321', 'owner', 'active', 'email', NOW()),
-('employee01', 'Lê Văn Cường', 'employee01@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0933445566', 'employee', 'active', 'email', NOW()),
-('customer01', 'Phạm Thị Dung', 'customer01@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234567', 'customer', 'active', 'email', NOW()),
-('customer02', 'Hoàng Văn Em', 'customer02@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0977889900', 'customer', 'active', 'email', NOW());
+-- Xóa dữ liệu cũ (nếu có)
+SET FOREIGN_KEY_CHECKS = 0;
 
--- Seed dữ liệu cho bảng branches
-INSERT INTO branches (owner_id, name, address, phone, revenue, created_at) VALUES
-(2, 'Nhà trọ Bình Minh', '123 Đường Láng, Đống Đa, Hà Nội', '0987654321', 15000000.00, NOW()),
-(2, 'Nhà trọ Sao Mai', '456 Đường Nguyễn Trãi, Thanh Xuân, Hà Nội', '0987654322', 12000000.00, NOW());
+DELETE FROM branch_customers;
+DELETE FROM employee_assignments;
+DELETE FROM room_occupants;
+DELETE FROM tickets;
+DELETE FROM notifications;
+DELETE FROM maintenance_requests;
+DELETE FROM utility_usage;
+DELETE FROM services;
+DELETE FROM invoices;
+DELETE FROM payments;
+DELETE FROM contracts;
+DELETE FROM rooms;
+DELETE FROM room_types;
+DELETE FROM branches;
+DELETE FROM users;
 
--- Seed dữ liệu cho bảng room_types
-INSERT INTO room_types (name, description, default_price, created_at) VALUES
-('Phòng đơn', 'Phòng 15m2, có điều hòa, WC riêng', 2500000.00, NOW()),
-('Phòng đôi', 'Phòng 25m2, có điều hòa, WC riêng, ban công', 3500000.00, NOW()),
-('Phòng VIP', 'Phòng 35m2, đầy đủ tiện nghi, view đẹp', 5000000.00, NOW());
+SET FOREIGN_KEY_CHECKS = 1;
 
--- Seed dữ liệu cho bảng rooms
-INSERT INTO rooms (branch_id, type_id, name, price, status, created_at) VALUES
-(1, 1, 'Phòng 101', 2500000.00, 'available', NOW()),
-(1, 2, 'Phòng 201', 3500000.00, 'occupied', NOW()),
-(1, 3, 'Phòng 301', 5000000.00, 'maintenance', NOW()),
-(2, 1, 'Phòng A1', 2600000.00, 'available', NOW()),
-(2, 2, 'Phòng B1', 3600000.00, 'occupied', NOW());
+-- Thêm dữ liệu vào bảng users --password: 123456
+INSERT INTO users 
+(username, name, email, password, phone, role, status, provider, created_by) 
+VALUES 
+-- Quản trị viên hệ thống
+('admin', 'Admin', 'admin@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234567', 'admin', 'active', 'email', NULL),
 
--- Seed dữ liệu cho bảng contracts
-INSERT INTO contracts (room_id, user_id, start_date, end_date, status, created_at, created_by, branch_id, deposit) VALUES
-(2, 4, '2025-01-01', '2025-12-31', 'active', NOW(), 2, 1, 3500000.00),
-(5, 5, '2025-02-01', '2025-08-01', 'active', NOW(), 2, 2, 3600000.00);
+-- Chủ nhà trọ
+('tranthibich', 'Trần Thị Bích', 'owner1@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234568', 'owner', 'active', 'email', 1),
+('lehongchau', 'Lê Hồng Châu', 'owner2@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234569', 'owner', 'active', 'email', 1),
 
--- Seed dữ liệu cho bảng payments
-INSERT INTO payments (contract_id, amount, due_date, payment_date, status, created_at) VALUES
-(1, 3500000.00, '2025-02-01', NULL, 'pending', NOW()),
-(1, 3500000.00, '2025-03-01', '2025-02-28', 'paid', NOW()),
-(2, 3600000.00, '2025-03-01', NULL, 'pending', NOW());
+-- Nhân viên
+('phamthid', 'Phạm Thị Dung', 'employee1@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234570', 'employee', 'active', 'email', 2),
+('doanvanh', 'Đoàn Văn Hậu', 'employee2@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234571', 'employee', 'active', 'email', 2),
+('nguyenvank', 'Nguyễn Văn Khánh', 'employee3@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234572', 'employee', 'active', 'email', 3),
+('tranthil', 'Trần Thị Lan', 'employee4@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234573', 'employee', 'active', 'email', 3),
 
--- Seed dữ liệu cho bảng services
-INSERT INTO services (name, price, unit, created_at) VALUES
-('Điện', 3500.00, 'kWh', NOW()),
-('Nước', 20000.00, 'm3', NOW()),
-('Internet', 100000.00, 'tháng', NOW());
+-- Khách hàng
+('luongminhm', 'Lương Minh Mẫn', 'customer1@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234574', 'customer', 'active', 'email', 4),
+('nguyenngocn', 'Nguyễn Ngọc Nhi', 'customer2@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234575', 'customer', 'active', 'email', 4),
+('phamhoango', 'Phạm Hoàng Oanh', 'customer3@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234576', 'customer', 'active', 'email', 5),
+('tranquangp', 'Trần Quang Phúc', 'customer4@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234577', 'customer', 'active', 'email', 6),
+('lehungq', 'Lê Hùng Quân', 'customer5@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234578', 'customer', 'active', 'email', 6),
+('ngothir', 'Ngô Thị Rinh', 'customer6@example.com', '$2y$10$BqySEFjlKULrzDOuZDxsO.ATUeLikBfozPm5zbUfl93MVBQ6EWdhu', '0901234579', 'customer', 'active', 'email', 7);
 
--- Seed dữ liệu cho bảng branch_service_defaults
-INSERT INTO branch_service_defaults (branch_id, service_id, default_price, created_at) VALUES
-(1, 1, 3500.00, NOW()),
-(1, 2, 20000.00, NOW()),
-(1, 3, 100000.00, NOW()),
-(2, 1, 3600.00, NOW()),
-(2, 2, 21000.00, NOW()),
-(2, 3, 110000.00, NOW());
+-- Thêm dữ liệu vào bảng branches
+INSERT INTO branches (owner_id, name, address, phone) VALUES
+(2, 'Nhà Trọ Bình An', '123 Đường Láng, Quận Đống Đa, Hà Nội', '0901234580'),
+(3, 'Nhà Trọ Hạnh Phúc', '456 Đường Nguyễn Trãi, Quận 5, TP.HCM', '0901234581');
 
--- Seed dữ liệu cho bảng utility_usage
+-- Thêm dữ liệu vào bảng room_types
+INSERT INTO room_types (branch_id, name, description, default_price) VALUES
+(1, 'Phòng Đơn', 'Phòng 20m2, 1 giường đơn', 2000000.00),
+(1, 'Phòng Đôi', 'Phòng 30m2, 2 giường đơn', 3500000.00),
+(2, 'Phòng Tiêu Chuẩn', 'Phòng 25m2, đầy đủ tiện nghi', 2500000.00),
+(2, 'Phòng Cao Cấp', 'Phòng 35m2, có ban công', 4000000.00);
+
+-- Thêm dữ liệu vào bảng rooms
+INSERT INTO rooms (branch_id, type_id, name, price, status) VALUES
+(1, 1, 'Phòng 101', 2000000.00, 'occupied'),
+(1, 2, 'Phòng 201', 3500000.00, 'available'),
+(1, 1, 'Phòng 102', 2000000.00, 'maintenance'),
+(2, 3, 'Phòng A1', 2500000.00, 'occupied'),
+(2, 4, 'Phòng B1', 4000000.00, 'available');
+
+-- Thêm dữ liệu vào bảng contracts
+INSERT INTO contracts (room_id, user_id, start_date, end_date, status, created_by, branch_id, deposit) VALUES
+(1, 8, '2025-01-01', '2025-12-31', 'active', 4, 1, 2000000.00),
+(4, 11, '2025-02-01', '2025-12-31', 'active', 6, 2, 2500000.00);
+
+-- Thêm dữ liệu vào bảng payments
+INSERT INTO payments (contract_id, amount, due_date, payment_date, status) VALUES
+(1, 2000000.00, '2025-02-01', '2025-01-31', 'paid'),
+(1, 2000000.00, '2025-03-01', NULL, 'pending'),
+(2, 2500000.00, '2025-03-01', NULL, 'pending');
+
+-- Thêm dữ liệu vào bảng invoices
+INSERT INTO invoices (contract_id, branch_id, amount, due_date, status) VALUES
+(1, 1, 2200000.00, '2025-02-01', 'paid'),
+(1, 1, 2200000.00, '2025-03-01', 'pending'),
+(2, 2, 2700000.00, '2025-03-01', 'pending');
+
+-- Thêm dữ liệu vào bảng services
+INSERT INTO services (branch_id, name, price, unit) VALUES
+(1, 'Điện', 3500.00, 'kWh'),
+(1, 'Nước', 20000.00, 'm3'),
+(2, 'Điện', 4000.00, 'kWh'),
+(2, 'Nước', 22000.00, 'm3'),
+(2, 'Internet', 150000.00, 'tháng');
+
+-- Thêm dữ liệu vào bảng utility_usage
 INSERT INTO utility_usage (room_id, service_id, month, usage_amount, custom_price, recorded_at) VALUES
-(2, 1, '2025-01', 100.00, NULL, NOW()),
-(2, 2, '2025-01', 5.00, NULL, NOW()),
-(5, 1, '2025-02', 120.00, NULL, NOW()),
-(5, 2, '2025-02', 6.00, NULL, NOW());
+(1, 1, '2025-01', 100.00, NULL, '2025-01-31 10:00:00'),
+(1, 2, '2025-01', 5.00, NULL, '2025-01-31 10:00:00'),
+(4, 3, '2025-02', 120.00, NULL, '2025-02-28 10:00:00'),
+(4, 4, '2025-02', 6.00, NULL, '2025-02-28 10:00:00');
 
--- Seed dữ liệu cho bảng maintenance_requests
-INSERT INTO maintenance_requests (room_id, description, status, created_at) VALUES
-(3, 'Sửa điều hòa bị hỏng', 'pending', NOW()),
-(5, 'Thay bóng đèn phòng tắm', 'in_progress', NOW());
+-- Thêm dữ liệu vào bảng maintenance_requests
+INSERT INTO maintenance_requests (room_id, description, status, created_at, created_by) VALUES
+(1, 'Sửa ống nước bị rò rỉ', 'pending', '2025-02-01 09:00:00', 8),
+(3, 'Kiểm tra hệ thống điện', 'in_progress', '2025-02-02 10:00:00', 4),
+(4, 'Sửa cửa sổ bị kẹt', 'completed', '2025-02-03 11:00:00', 11);
 
--- Seed dữ liệu cho bảng logs
-INSERT INTO logs (user_id, action, ip_address, affected_table, affected_record_id, created_at) VALUES
-(1, 'Tạo hợp đồng mới', '192.168.1.1', 'contracts', 1, NOW()),
-(2, 'Cập nhật trạng thái phòng', '192.168.1.2', 'rooms', 3, NOW());
-
--- Seed dữ liệu cho bảng room_occupants
-INSERT INTO room_occupants (room_id, user_id, relation, created_at) VALUES
-(2, 4, 'Chủ hợp đồng', NOW()),
-(5, 5, 'Chủ hợp đồng', NOW());
-
--- Seed dữ liệu cho bảng tickets
-INSERT INTO tickets (user_id, subject, message, status, created_at) VALUES
-(4, 'Hỏi về tiền điện', 'Tiền điện tháng này cao bất thường', 'open', NOW()),
-(5, 'Yêu cầu sửa chữa', 'Cần sửa ống nước phòng B1', 'pending', NOW());
-
--- Seed dữ liệu cho bảng notifications
+-- Thêm dữ liệu vào bảng notifications
 INSERT INTO notifications (user_id, message, is_read, created_at) VALUES
-(4, 'Hợp đồng của bạn đã được tạo thành công', FALSE, NOW()),
-(5, 'Thanh toán tháng 3 đã đến hạn', FALSE, NOW());
+(8, 'Hóa đơn tháng 2 đã được tạo.', FALSE, '2025-02-01 08:00:00'),
+(11, 'Yêu cầu bảo trì của bạn đã được xử lý.', TRUE, '2025-02-03 12:00:00'),
+(2, 'Khách hàng mới đã được thêm vào chi nhánh.', FALSE, '2025-02-01 09:00:00');
 
--- Seed dữ liệu cho bảng settings
-INSERT INTO settings (key_name, value, type, created_at) VALUES
-('max_rooms_per_branch', '50', 'int', NOW()),
-('default_currency', 'VND', 'string', NOW());
+-- Thêm dữ liệu vào bảng tickets
+INSERT INTO tickets (user_id, subject, message, status, created_at) VALUES
+(8, 'Hỏi về hóa đơn', 'Hóa đơn tháng 2 có sai sót, vui lòng kiểm tra.', 'open', '2025-02-02 10:00:00'),
+(11, 'Yêu cầu hỗ trợ', 'Cần hỗ trợ về hợp đồng thuê.', 'pending', '2025-02-03 11:00:00');
 
--- Seed dữ liệu cho bảng employee_assignments
-INSERT INTO employee_assignments (employee_id, branch_id, created_at) VALUES
-(3, 1, NOW()),
-(3, 2, NOW());
+-- Thêm dữ liệu vào bảng room_occupants
+INSERT INTO room_occupants (room_id, user_id, relation, created_at) VALUES
+(1, 8, 'Chủ hợp đồng', '2025-01-01 09:00:00'),
+(1, 9, 'Người thân', '2025-01-01 09:00:00'),
+(4, 11, 'Chủ hợp đồng', '2025-02-01 09:00:00'),
+(4, 12, 'Bạn cùng phòng', '2025-02-01 09:00:00');
 
--- Seed dữ liệu cho bảng revenue_statistics
-INSERT INTO revenue_statistics (branch_id, year, month, revenue, created_at) VALUES
-(1, 2025, 1, 7000000.00, NOW()),
-(2, 2025, 1, 3600000.00, NOW());
+-- Thêm dữ liệu vào bảng employee_assignments
+INSERT INTO employee_assignments (employee_id, branch_id, created_at, created_by) VALUES
+(4, 1, '2025-01-01 08:00:00', 2),
+(5, 1, '2025-01-01 08:00:00', 2),
+(6, 2, '2025-01-01 08:00:00', 3),
+(7, 2, '2025-01-01 08:00:00', 3);
 
--- Seed dữ liệu cho bảng branch_customers
-INSERT INTO branch_customers (branch_id, user_id, created_at) VALUES
-(1, 4, NOW()),
-(2, 5, NOW());
-
--- Seed dữ liệu cho bảng room_price_history
-INSERT INTO room_price_history (room_id, price, effective_date, created_at) VALUES
-(2, 3500000.00, '2025-01-01', NOW()),
-(5, 3600000.00, '2025-02-01', NOW());
-
--- Seed dữ liệu cho bảng room_status_history
-INSERT INTO room_status_history (room_id, status, change_date, reason, created_at) VALUES
-(3, 'maintenance', NOW(), 'Điều hòa hỏng', NOW()),
-(5, 'occupied', NOW(), 'Khách thuê mới', NOW());
-
--- Seed dữ liệu cho bảng reviews
-INSERT INTO reviews (user_id, branch_id, room_id, rating, comment, created_at) VALUES
-(4, 1, 2, 4, 'Phòng sạch sẽ, dịch vụ tốt', NOW()),
-(5, 2, 5, 3, 'Phòng ổn nhưng wifi yếu', NOW());
-
--- Seed dữ liệu cho bảng promotions
-INSERT INTO promotions (branch_id, name, discount_percentage, start_date, end_date, applicable_to, created_at) VALUES
-(1, 'Khuyến mãi Tết', 10.00, '2025-01-01', '2025-02-01', 'room', NOW()),
-(2, 'Giảm giá mùa hè', 15.00, '2025-06-01', '2025-08-31', 'contract', NOW());
-
--- Seed dữ liệu cho bảng invoices
-INSERT INTO invoices (contract_id, branch_id, amount, due_date, status, created_at) VALUES
-(1, 1, 3500000.00, '2025-02-01', 'pending', NOW()),
-(2, 2, 3600000.00, '2025-03-01', 'pending', NOW());
+-- Thêm dữ liệu vào bảng branch_customers
+INSERT INTO branch_customers (branch_id, user_id, created_at, created_by) VALUES
+(1, 8, '2025-01-01 08:00:00', 4),
+(1, 9, '2025-01-01 08:00:00', 4),
+(1, 10, '2025-01-01 08:00:00', 5),
+(2, 11, '2025-02-01 08:00:00', 6),
+(2, 12, '2025-02-01 08:00:00', 6),
+(2, 13, '2025-02-01 08:00:00', 7);
