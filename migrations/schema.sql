@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS services (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     is_deleted TINYINT(1) DEFAULT 0,
+    type ENUM('electricity', 'water', 'other') NOT NULL DEFAULT 'other',
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     INDEX idx_services_branch_id (branch_id),
     INDEX idx_services_is_deleted (is_deleted)

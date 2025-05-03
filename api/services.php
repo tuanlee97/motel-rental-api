@@ -33,40 +33,41 @@ function getServices() {
         $params[] = $branch_id;
     }
 
-    // Phân quyền: Chỉ owner thấy dịch vụ của chi nhánh mình
+    // Phân quyền dựa trên vai trò
+    $branchCondition = '';
     if ($role === 'owner') {
-        $conditions[] = "s.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
+        $branchCondition = "AND s.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
         $params[] = $user_id;
     } elseif ($role === 'employee') {
-        $conditions[] = "s.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
+        $branchCondition = "AND s.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
         $params[] = $user_id;
     } elseif ($role === 'customer') {
-        $conditions[] = "s.branch_id IN (SELECT branch_id FROM branch_customers WHERE user_id = ?)";
+        $branchCondition = "AND s.branch_id IN (SELECT branch_id FROM branch_customers WHERE user_id = ?)";
         $params[] = $user_id;
     }
 
     // Xây dựng truy vấn
-    $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
+    $whereClause = (!empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "") . $branchCondition;
     $query = "
-        SELECT s.id, s.branch_id, s.name, s.price, s.unit, s.created_at
+        SELECT s.id, s.branch_id, s.name, s.price, s.unit, s.type, s.created_at
         FROM services s
         $whereClause
         LIMIT $limit OFFSET $offset
     ";
-    error_log("query: " . $query);
+    error_log("Query: $query");
+    error_log("Params: " . json_encode($params));
+
     try {
-        // Đếm tổng số bản ghi
         $countStmt = $pdo->prepare("SELECT COUNT(*) FROM services s $whereClause");
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
         $totalPages = ceil($totalRecords / $limit);
 
-        // Truy vấn dữ liệu
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $services = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
-        error_log("Lỗi cơ sở dữ liệu: " . $e->getMessage());
+        error_log("Database Error: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
         return;
     }
@@ -90,27 +91,22 @@ function getServiceById() {
     $role = $user['role'];
     $service_id = getResourceIdFromUri('#/services/([0-9]+)#');
 
-    // Điều kiện phân quyền
-    $condition = "";
+    $condition = "AND s.is_deleted = 0";
     $params = [$service_id];
 
     if ($role === 'owner') {
-        $condition = "AND s.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
+        $condition .= " AND s.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
         $params[] = $user_id;
     } elseif ($role === 'employee') {
-        $condition = "AND s.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
+        $condition .= " AND s.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
         $params[] = $user_id;
     } elseif ($role === 'customer') {
-        $condition = "AND s.branch_id IN (SELECT branch_id FROM branch_customers WHERE user_id = ?)";
+        $condition .= " AND s.branch_id IN (SELECT branch_id FROM branch_customers WHERE user_id = ?)";
         $params[] = $user_id;
     }
 
     try {
-        $stmt = $pdo->prepare("
-            SELECT s.id, s.branch_id, s.name, s.price, s.unit, s.created_at
-            FROM services s
-            WHERE s.is_deleted = 0 AND s.id = ? $condition
-        ");
+        $stmt = $pdo->prepare("SELECT s.id, s.branch_id, s.name, s.price, s.unit, s.type, s.created_at FROM services s WHERE s.id = ? $condition");
         $stmt->execute($params);
         $service = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -121,7 +117,7 @@ function getServiceById() {
 
         responseJson(['data' => $service, 'message' => 'Lấy dịch vụ thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy dịch vụ ID $service_id: " . $e->getMessage());
+        error_log("Error fetching service ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -144,13 +140,13 @@ function createService() {
     $price = filter_var($input['price'], FILTER_VALIDATE_FLOAT);
     $unit = sanitizeInput($input['unit']);
     $branch_id = (int)$input['branch_id'];
+    $type = isset($input['type']) && in_array($input['type'], ['electricity', 'water', 'other']) ? $input['type'] : 'other';
 
     if ($price === false || $price < 0) {
         responseJson(['message' => 'Giá dịch vụ không hợp lệ'], 400);
         return;
     }
 
-    // Kiểm tra branch_id tồn tại
     $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ?");
     $stmt->execute([$branch_id]);
     if (!$stmt->fetch()) {
@@ -158,7 +154,6 @@ function createService() {
         return;
     }
 
-    // Kiểm tra quyền sở hữu chi nhánh
     $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ? AND owner_id = ?");
     $stmt->execute([$branch_id, $user_id]);
     if (!$stmt->fetch()) {
@@ -166,8 +161,7 @@ function createService() {
         return;
     }
 
-    // Kiểm tra trùng tên dịch vụ trong cùng chi nhánh
-    $stmt = $pdo->prepare("SELECT id FROM services WHERE branch_id = ? AND name = ?");
+    $stmt = $pdo->prepare("SELECT id FROM services WHERE branch_id = ? AND name = ? AND is_deleted = 0");
     $stmt->execute([$branch_id, $name]);
     if ($stmt->fetch()) {
         responseJson(['message' => 'Dịch vụ đã tồn tại trong chi nhánh này'], 400);
@@ -175,20 +169,14 @@ function createService() {
     }
 
     try {
-        $stmt = $pdo->prepare("
-            INSERT INTO services (branch_id, name, price, unit)
-            VALUES (?, ?, ?, ?)
-        ");
-        $stmt->execute([$branch_id, $name, $price, $unit]);
+        $stmt = $pdo->prepare("INSERT INTO services (branch_id, name, price, unit, type) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$branch_id, $name, $price, $unit, $type]);
 
         $service_id = $pdo->lastInsertId();
         createNotification($pdo, $user_id, "Dịch vụ '$name' đã được thêm vào chi nhánh.");
-        responseJson([
-            'data' => ['id' => $service_id],
-            'message' => 'Tạo dịch vụ thành công'
-        ], 201);
+        responseJson(['data' => ['id' => $service_id], 'message' => 'Tạo dịch vụ thành công'], 201);
     } catch (PDOException $e) {
-        error_log("Lỗi tạo dịch vụ: " . $e->getMessage());
+        error_log("Error creating service: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -211,8 +199,7 @@ function updateService() {
         return;
     }
 
-    // Kiểm tra quyền sở hữu chi nhánh
-    $stmt = $pdo->prepare("SELECT s.id, s.branch_id FROM services s JOIN branches b ON s.branch_id = b.id WHERE s.id = ? AND b.owner_id = ?");
+    $stmt = $pdo->prepare("SELECT s.id, s.branch_id FROM services s JOIN branches b ON s.branch_id = b.id WHERE s.id = ? AND b.owner_id = ? AND s.is_deleted = 0");
     $stmt->execute([$service_id, $user_id]);
     $service = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$service) {
@@ -224,8 +211,7 @@ function updateService() {
     $params = [];
 
     if (!empty($input['name'])) {
-        // Kiểm tra trùng tên dịch vụ trong cùng chi nhánh
-        $stmt = $pdo->prepare("SELECT id FROM services WHERE branch_id = ? AND name = ? AND id != ?");
+        $stmt = $pdo->prepare("SELECT id FROM services WHERE branch_id = ? AND name = ? AND id != ? AND is_deleted = 0");
         $stmt->execute([$service['branch_id'], sanitizeInput($input['name']), $service_id]);
         if ($stmt->fetch()) {
             responseJson(['message' => 'Tên dịch vụ đã tồn tại trong chi nhánh này'], 400);
@@ -247,16 +233,18 @@ function updateService() {
         $updates[] = "unit = ?";
         $params[] = sanitizeInput($input['unit']);
     }
+    if (isset($input['type']) && in_array($input['type'], ['electricity', 'water', 'other'])) {
+        $updates[] = "type = ?";
+        $params[] = $input['type'];
+    }
     if (!empty($input['branch_id'])) {
         $branch_id = (int)$input['branch_id'];
-        // Kiểm tra branch_id tồn tại
         $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ?");
         $stmt->execute([$branch_id]);
         if (!$stmt->fetch()) {
             responseJson(['message' => 'Chi nhánh không tồn tại'], 400);
             return;
         }
-        // Kiểm tra quyền sở hữu chi nhánh mới
         $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ? AND owner_id = ?");
         $stmt->execute([$branch_id, $user_id]);
         if (!$stmt->fetch()) {
@@ -279,12 +267,9 @@ function updateService() {
         $stmt->execute($params);
 
         createNotification($pdo, $user_id, "Dịch vụ ID $service_id đã được cập nhật.");
-        responseJson([
-            'data' => ['id' => $service_id],
-            'message' => 'Cập nhật dịch vụ thành công'
-        ]);
+        responseJson(['data' => ['id' => $service_id], 'message' => 'Cập nhật dịch vụ thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi cập nhật dịch vụ ID $service_id: " . $e->getMessage());
+        error_log("Error updating service ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -301,8 +286,7 @@ function deleteService() {
         return;
     }
 
-    // Kiểm tra quyền sở hữu chi nhánh
-    $stmt = $pdo->prepare("SELECT s.id FROM services s JOIN branches b ON s.branch_id = b.id WHERE s.id = ? AND b.owner_id = ?");
+    $stmt = $pdo->prepare("SELECT s.id FROM services s JOIN branches b ON s.branch_id = b.id WHERE s.id = ? AND b.owner_id = ? AND s.is_deleted = 0");
     $stmt->execute([$service_id, $user_id]);
     if (!$stmt->fetch()) {
         responseJson(['message' => 'Dịch vụ không tồn tại hoặc bạn không có quyền xóa'], 403);
@@ -310,14 +294,13 @@ function deleteService() {
     }
 
     try {
-        checkResourceExists($pdo, 'services', $service_id);
-        $stmt = $pdo->prepare("DELETE FROM services WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE services SET is_deleted = 1 WHERE id = ?");
         $stmt->execute([$service_id]);
 
-        createNotification($pdo, $user_id, "Dịch vụ ID $service_id đã được xóa.");
-        responseJson(['message' => 'Xóa dịch vụ thành công']);
+        createNotification($pdo, $user_id, "Dịch vụ ID $service_id đã được xóa mềm.");
+        responseJson(['data' => ['id' => $service_id], 'message' => 'Xóa dịch vụ thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi xóa dịch vụ ID $service_id: " . $e->getMessage());
+        error_log("Error deleting service ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

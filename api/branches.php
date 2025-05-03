@@ -283,13 +283,27 @@ function deleteBranch() {
     $role = $user['role'];
     $branch_id = getResourceIdFromUri('#/branches/([0-9]+)#');
 
-    if ($role !== 'admin') {
+    // Kiểm tra quyền: Chỉ admin hoặc chủ chi nhánh (owner) của chi nhánh đó mới được xóa
+    if ($role !== 'admin' && $role !== 'owner') {
         responseJson(['message' => 'Không có quyền xóa chi nhánh'], 403);
         return;
     }
 
     try {
+        // Kiểm tra chi nhánh có tồn tại
         checkResourceExists($pdo, 'branches', $branch_id);
+
+        // Nếu là owner, kiểm tra xem branch_id có thuộc về user_id không
+        if ($role === 'owner') {
+            $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ? AND owner_id = ?");
+            $stmt->execute([$branch_id, $user_id]);
+            if (!$stmt->fetch()) {
+                responseJson(['message' => 'Bạn không có quyền xóa chi nhánh này'], 403);
+                return;
+            }
+        }
+
+        // Thực hiện xóa chi nhánh
         $stmt = $pdo->prepare("DELETE FROM branches WHERE id = ?");
         $stmt->execute([$branch_id]);
 

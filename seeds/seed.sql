@@ -82,12 +82,12 @@ INSERT INTO invoices (contract_id, branch_id, amount, due_date, status) VALUES
 (2, 2, 2700000.00, '2025-03-01', 'pending');
 
 -- Thêm dữ liệu vào bảng services
-INSERT INTO services (branch_id, name, price, unit) VALUES
-(1, 'Điện', 3500.00, 'kWh'),
-(1, 'Nước', 20000.00, 'm3'),
-(2, 'Điện', 4000.00, 'kWh'),
-(2, 'Nước', 22000.00, 'm3'),
-(2, 'Internet', 150000.00, 'tháng');
+INSERT INTO services (branch_id, name, price, unit, type) VALUES
+(1, 'Điện', 3500.00, 'kWh', 'electricity'),
+(1, 'Nước', 20000.00, 'm3', 'water'),
+(2, 'Điện', 4000.00, 'kWh', 'electricity'),
+(2, 'Nước', 22000.00, 'm3', 'water'),
+(2, 'Internet', 150000.00, 'tháng', 'other');
 
 -- Thêm dữ liệu vào bảng utility_usage
 INSERT INTO utility_usage (room_id, service_id, month, usage_amount, custom_price, recorded_at) VALUES
