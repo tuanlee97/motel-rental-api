@@ -50,51 +50,51 @@ INSERT INTO branches (owner_id, name, address, phone) VALUES
 (3, 'Nhà Trọ Hạnh Phúc', '456 Đường Nguyễn Trãi, Quận 5, TP.HCM', '0901234581');
 
 -- Thêm dữ liệu vào bảng room_types
-INSERT INTO room_types (branch_id, name, description, default_price) VALUES
-(1, 'Phòng Đơn', 'Phòng 20m2, 1 giường đơn', 2000000.00),
-(1, 'Phòng Đôi', 'Phòng 30m2, 2 giường đơn', 3500000.00),
-(2, 'Phòng Tiêu Chuẩn', 'Phòng 25m2, đầy đủ tiện nghi', 2500000.00),
-(2, 'Phòng Cao Cấp', 'Phòng 35m2, có ban công', 4000000.00);
+INSERT INTO room_types (branch_id, name, description) VALUES
+(1, 'Phòng Đơn', 'Phòng 20m2, 1 giường đơn'),
+(1, 'Phòng Đôi', 'Phòng 30m2, 2 giường đơn'),
+(2, 'Phòng Tiêu Chuẩn', 'Phòng 25m2, đầy đủ tiện nghi'),
+(2, 'Phòng Cao Cấp', 'Phòng 35m2, có ban công');
 
 -- Thêm dữ liệu vào bảng rooms
 INSERT INTO rooms (branch_id, type_id, name, price, status) VALUES
-(1, 1, 'Phòng 101', 2000000.00, 'occupied'),
-(1, 2, 'Phòng 201', 3500000.00, 'available'),
-(1, 1, 'Phòng 102', 2000000.00, 'maintenance'),
-(2, 3, 'Phòng A1', 2500000.00, 'occupied'),
-(2, 4, 'Phòng B1', 4000000.00, 'available');
+(1, 1, 'Phòng 101', 2000000, 'occupied'),
+(1, 2, 'Phòng 201', 3500000, 'available'),
+(1, 1, 'Phòng 102', 2000000, 'maintenance'),
+(2, 3, 'Phòng A1', 2500000, 'occupied'),
+(2, 4, 'Phòng B1', 4000000, 'available');
 
 -- Thêm dữ liệu vào bảng contracts
 INSERT INTO contracts (room_id, user_id, start_date, end_date, status, created_by, branch_id, deposit) VALUES
-(1, 8, '2025-01-01', '2025-12-31', 'active', 4, 1, 2000000.00),
-(4, 11, '2025-02-01', '2025-12-31', 'active', 6, 2, 2500000.00);
+(1, 8, '2025-01-01', '2025-12-31', 'active', 4, 1, 2000000),
+(4, 11, '2025-02-01', '2025-12-31', 'active', 6, 2, 2500000);
 
 -- Thêm dữ liệu vào bảng payments
 INSERT INTO payments (contract_id, amount, due_date, payment_date, status) VALUES
-(1, 2000000.00, '2025-02-01', '2025-01-31', 'paid'),
-(1, 2000000.00, '2025-03-01', NULL, 'pending'),
-(2, 2500000.00, '2025-03-01', NULL, 'pending');
+(1, 2000000, '2025-02-01', '2025-01-31', 'paid'),
+(1, 2000000, '2025-03-01', NULL, 'pending'),
+(2, 2500000, '2025-03-01', NULL, 'pending');
 
 -- Thêm dữ liệu vào bảng invoices
 INSERT INTO invoices (contract_id, branch_id, amount, due_date, status) VALUES
-(1, 1, 2200000.00, '2025-02-01', 'paid'),
-(1, 1, 2200000.00, '2025-03-01', 'pending'),
-(2, 2, 2700000.00, '2025-03-01', 'pending');
+(1, 1, 2200000, '2025-02-01', 'paid'),
+(1, 1, 2200000, '2025-03-01', 'pending'),
+(2, 2, 2700000, '2025-03-01', 'pending');
 
 -- Thêm dữ liệu vào bảng services
 INSERT INTO services (branch_id, name, price, unit, type) VALUES
-(1, 'Điện', 3500.00, 'kWh', 'electricity'),
-(1, 'Nước', 20000.00, 'm3', 'water'),
-(2, 'Điện', 4000.00, 'kWh', 'electricity'),
-(2, 'Nước', 22000.00, 'm3', 'water'),
-(2, 'Internet', 150000.00, 'tháng', 'other');
+(1, 'Điện', 3500, 'kWh', 'electricity'),
+(1, 'Nước', 20000, 'm3', 'water'),
+(2, 'Điện', 4000, 'kWh', 'electricity'),
+(2, 'Nước', 22000, 'm3', 'water'),
+(2, 'Internet', 150000, 'tháng', 'other');
 
 -- Thêm dữ liệu vào bảng utility_usage
 INSERT INTO utility_usage (room_id, service_id, month, usage_amount, custom_price, recorded_at) VALUES
-(1, 1, '2025-01', 100.00, NULL, '2025-01-31 10:00:00'),
-(1, 2, '2025-01', 5.00, NULL, '2025-01-31 10:00:00'),
-(4, 3, '2025-02', 120.00, NULL, '2025-02-28 10:00:00'),
-(4, 4, '2025-02', 6.00, NULL, '2025-02-28 10:00:00');
+(1, 1, '2025-01', 100, NULL, '2025-01-31 10:00:00'),
+(1, 2, '2025-01', 5, NULL, '2025-01-31 10:00:00'),
+(4, 3, '2025-02', 120, NULL, '2025-02-28 10:00:00'),
+(4, 4, '2025-02', 6, NULL, '2025-02-28 10:00:00');
 
 -- Thêm dữ liệu vào bảng maintenance_requests
 INSERT INTO maintenance_requests (room_id, description, status, created_at, created_by) VALUES

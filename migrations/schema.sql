@@ -35,7 +35,6 @@ CREATE TABLE IF NOT EXISTS room_types (
     branch_id INT NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    default_price DECIMAL(10,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     INDEX idx_room_types_branch_id (branch_id)

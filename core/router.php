@@ -32,7 +32,6 @@ function handleApiRequest($method, $uri) {
     'GET:branches/([0-9]+)/rooms_customers' => ['file' => '../api/branches.php', 'handler' => 'getRoomsAndCustomersByBranchId', 'middleware' => 'auth:admin,owner,employee'],
     // Rooms
     'GET:rooms' => ['file' => '../api/rooms.php', 'handler' => 'getRooms', 'middleware' => null],
-    'GET:rooms/all' => ['file' => '../api/rooms.php', 'handler' => 'getAllRooms', 'middleware' => null],
     'POST:rooms' => ['file' => '../api/rooms.php', 'handler' => 'createRoom', 'middleware' => 'auth:owner'],
     'GET:rooms/([0-9]+)' => ['file' => '../api/rooms.php', 'handler' => 'getRoomById', 'middleware' => null],
     'PUT:rooms/([0-9]+)' => ['file' => '../api/rooms.php', 'handler' => 'updateRoom', 'middleware' => 'auth:owner'],
