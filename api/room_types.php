@@ -91,11 +91,11 @@ function createRoomType() {
 
     try {
         checkResourceExists($pdo, 'branches', $data['branch_id']);
-        $stmt = $pdo->prepare("INSERT INTO room_types (branch_id, name, description, created_at) VALUES (?, ?, ?, ?, NOW())");
+        $stmt = $pdo->prepare("INSERT INTO room_types (branch_id, name, description, created_at) VALUES (?, ?, ?, NOW())");
         $stmt->execute([$data['branch_id'], $data['name'], $data['description'] ?? null]);
         responseJson(['status' => 'success', 'message' => 'Tạo loại phòng thành công']);
     } catch (PDOException $e) {
-        logError("Lỗi tạo loại phòng: " . $e->getMessage());
+        error_log("Lỗi tạo loại phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

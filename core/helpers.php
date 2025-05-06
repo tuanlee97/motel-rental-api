@@ -15,7 +15,10 @@ function logError($message) {
 }
 
 function sanitizeInput($input) {
-    return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
+    if (is_array($input)) {
+        return array_map('sanitizeInput', $input);
+    }
+    return htmlspecialchars(trim((string)$input), ENT_QUOTES, 'UTF-8');
 }
 
 function responseJson($data, $statusCode = 200) {
