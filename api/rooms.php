@@ -22,10 +22,22 @@ function getRooms() {
         $branch_id = (int)$_GET['branch_id'];
         $conditions[] = "r.branch_id = ?";
         $params[] = $branch_id;
-    } elseif ($role === 'owner' && $pdo->query("SELECT COUNT(*) FROM branches WHERE owner_id = $user_id")->fetchColumn() === 1) {
-        $branch_id = $pdo->query("SELECT id FROM branches WHERE owner_id = $user_id LIMIT 1")->fetchColumn();
-        $conditions[] = "r.branch_id = ?";
-        $params[] = $branch_id;
+    } elseif ($role === 'owner') {
+        $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? LIMIT 1");
+        $stmt->execute([$user_id]);
+        $branch_id = $stmt->fetchColumn();
+        if ($branch_id) {
+            $conditions[] = "r.branch_id = ?";
+            $params[] = $branch_id;
+        }
+    } elseif ($role === 'employee') {
+        $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? LIMIT 1");
+        $stmt->execute([$user_id]);
+        $branch_id = $stmt->fetchColumn();
+        if ($branch_id) {
+            $conditions[] = "r.branch_id = ?";
+            $params[] = $branch_id;
+        }
     } else {
         if ($role !== 'admin') {
             $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
@@ -49,7 +61,7 @@ function getRooms() {
     ";
 
     try {
-        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM rooms r $whereClause");
+        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM rooms r JOIN room_types rt ON r.type_id = rt.id JOIN branches b ON r.branch_id = b.id $whereClause");
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
         $totalPages = ceil($totalRecords / $limit);
@@ -61,10 +73,15 @@ function getRooms() {
         responseJson([
             'status' => 'success',
             'data' => $rooms,
-            'pagination' => ['current_page' => $page, 'limit' => $limit, 'total_records' => $totalRecords, 'total_pages' => $totalPages]
+            'pagination' => [
+                'current_page' => $page,
+                'limit' => $limit,
+                'total_records' => $totalRecords,
+                'total_pages' => $totalPages
+            ]
         ]);
     } catch (PDOException $e) {
-        logError("Lỗi lấy danh sách phòng: " . $e->getMessage());
+        error_log("Lỗi lấy danh sách phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -102,7 +119,7 @@ function createRoom() {
         $stmt->execute([$data['branch_id'], $data['type_id'], $data['name'], $data['price'] ?? 0]);
         responseJson(['status' => 'success', 'message' => 'Tạo phòng thành công']);
     } catch (PDOException $e) {
-        logError("Lỗi tạo phòng: " . $e->getMessage());
+        error_log("Lỗi tạo phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -148,7 +165,7 @@ function updateRoom() {
 
         responseJson(['status' => 'success', 'message' => 'Cập nhật phòng thành công']);
     } catch (PDOException $e) {
-        logError("Lỗi cập nhật phòng ID $room_id: " . $e->getMessage());
+        error_log("Lỗi cập nhật phòng ID $room_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -188,7 +205,7 @@ function updateRoomStatus() {
         $stmt->execute([$status, $room_id]);
         responseJson(['status' => 'success', 'message' => 'Cập nhật trạng thái phòng thành công']);
     } catch (PDOException $e) {
-        logError("Lỗi cập nhật trạng thái phòng ID $room_id: " . $e->getMessage());
+        error_log("Lỗi cập nhật trạng thái phòng ID $room_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -231,7 +248,7 @@ function createContract() {
         createNotification($pdo, $data['user_id'], "Hợp đồng thuê phòng ID $contractId đã được tạo.");
         responseJson(['status' => 'success', 'message' => 'Tạo hợp đồng thành công']);
     } catch (PDOException $e) {
-        logError("Lỗi tạo hợp đồng: " . $e->getMessage());
+        error_log("Lỗi tạo hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -279,7 +296,7 @@ function deleteRoom() {
         responseJson(['status' => 'success', 'message' => 'Xóa phòng thành công']);
     } catch (PDOException $e) {
         $pdo->rollBack();
-        logError("Lỗi xóa phòng ID $room_id: " . $e->getMessage());
+        error_log("Lỗi xóa phòng ID $room_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

@@ -87,7 +87,7 @@ function handleApiRequest($method, $uri) {
     'POST:contracts' => ['file' => '../api/contracts.php', 'handler' => 'createContract', 'middleware' => 'auth:owner,employee'],
     'GET:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'getContractById', 'middleware' => 'auth:admin,owner,employee,customer'],
     'PUT:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'updateContract', 'middleware' => 'auth:owner,employee'],
-    'PATCH:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'patchContract', 'middleware' => 'auth:owner,employee'],
+    // 'PATCH:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'patchContract', 'middleware' => 'auth:owner,employee'],
     'DELETE:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'deleteContract', 'middleware' => 'auth:owner'],
     // Payments
     'GET:payments' => ['file' => '../api/payments.php', 'handler' => 'getPayments', 'middleware' => 'auth:admin,owner,employee,customer'],
