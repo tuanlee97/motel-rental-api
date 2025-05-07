@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     provider ENUM('email', 'google') DEFAULT 'email',
     created_by INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_users_email (email),
     INDEX idx_users_username (username)
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS branches (
     address TEXT NOT NULL,
     phone VARCHAR(15),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_branches_owner_id (owner_id),
     INDEX idx_branches_name (name)
@@ -36,6 +38,7 @@ CREATE TABLE IF NOT EXISTS room_types (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     INDEX idx_room_types_branch_id (branch_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -49,6 +52,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     price DECIMAL(10,2) NOT NULL DEFAULT 0,
     status ENUM('available', 'occupied', 'maintenance') DEFAULT 'available',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     FOREIGN KEY (type_id) REFERENCES room_types(id) ON DELETE CASCADE,
     INDEX idx_rooms_branch_status (branch_id, status)
@@ -61,11 +65,12 @@ CREATE TABLE IF NOT EXISTS contracts (
     user_id INT NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    status ENUM('active', 'expired', 'cancelled') DEFAULT 'active',
+    status ENUM('active', 'expired', 'ended', 'cancelled') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INT NOT NULL,
     branch_id INT NOT NULL,
     deposit DECIMAL(10,2) DEFAULT 0.00,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
@@ -82,6 +87,7 @@ CREATE TABLE IF NOT EXISTS payments (
     payment_date DATE,
     status ENUM('pending', 'paid', 'overdue') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
     INDEX idx_payments_contract_date (contract_id, due_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -95,6 +101,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     due_date DATE NOT NULL,
     status ENUM('pending', 'paid', 'overdue') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     INDEX idx_invoices_contract_due_date (contract_id, due_date)
@@ -111,6 +118,7 @@ CREATE TABLE IF NOT EXISTS services (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     is_deleted TINYINT(1) DEFAULT 0,
     type ENUM('electricity', 'water', 'other') NOT NULL DEFAULT 'other',
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     INDEX idx_services_branch_id (branch_id),
     INDEX idx_services_is_deleted (is_deleted)
@@ -125,6 +133,7 @@ CREATE TABLE IF NOT EXISTS utility_usage (
     usage_amount DECIMAL(10,2) NOT NULL,
     custom_price DECIMAL(10,2) NULL,
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
     UNIQUE KEY unique_room_service_month (room_id, service_id, month),
@@ -139,6 +148,7 @@ CREATE TABLE IF NOT EXISTS maintenance_requests (
     status ENUM('pending', 'in_progress', 'completed') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INT NOT NULL,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_maintenance_requests_room_status (room_id, status)
@@ -151,6 +161,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     message TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_notifications_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -163,6 +174,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     message TEXT NOT NULL,
     status ENUM('open', 'closed', 'pending') DEFAULT 'open',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_tickets_status_date (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -172,11 +184,13 @@ CREATE TABLE IF NOT EXISTS room_occupants (
     id INT AUTO_INCREMENT PRIMARY KEY,
     room_id INT NOT NULL,
     user_id INT NOT NULL,
-    relation VARCHAR(255),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_room_occupants_room_id (room_id)
+    INDEX idx_room_occupants_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Bảng employee_assignments: Lưu phân công nhân viên cho chi nhánh

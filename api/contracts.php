@@ -145,6 +145,14 @@ function createContract() {
             return;
         }
 
+        // Kiểm tra phòng có hợp đồng còn hiệu lực không
+        $stmt = $pdo->prepare("SELECT 1 FROM contracts WHERE room_id = ? AND status = 'active' AND end_date > NOW()");
+        $stmt->execute([$data['room_id']]);
+        if ($stmt->fetch()) {
+            responseJson(['status' => 'error', 'message' => 'Phòng đã có hợp đồng đang hoạt động'], 400);
+            return;
+        }
+
         // Tạo hợp đồng
         $stmt = $pdo->prepare("
             INSERT INTO contracts 
@@ -181,22 +189,25 @@ function updateContract() {
     $user_id = $user['user_id'];
     $role = $user['role'];
 
+    // Kiểm tra quyền người dùng
     if ($role !== 'admin' && $role !== 'owner' && $role !== 'employee') {
         responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật hợp đồng'], 403);
         return;
     }
 
+    // Nhận dữ liệu đầu vào
     $input = json_decode(file_get_contents('php://input'), true);
     validateRequiredFields($input, ['id', 'room_id', 'user_id', 'start_date', 'end_date', 'branch_id']);
     $data = sanitizeInput($input);
 
     try {
-        // Kiểm tra quyền truy cập
+        // Kiểm tra quyền truy cập hợp đồng
         checkResourceExists($pdo, 'contracts', $data['id']);
         checkResourceExists($pdo, 'rooms', $data['room_id']);
         checkResourceExists($pdo, 'users', $data['user_id']);
         checkResourceExists($pdo, 'branches', $data['branch_id']);
 
+        // Kiểm tra quyền của owner/employee
         if ($role === 'owner' || $role === 'employee') {
             $stmt = $pdo->prepare("
                 SELECT 1 
@@ -215,8 +226,22 @@ function updateContract() {
             }
         }
 
-        // Kiểm tra trạng thái phòng nếu thay đổi room_id
-        if ($data['room_id'] !== $data['current_room_id']) {
+        // Lấy thông tin hợp đồng từ database
+        $stmt = $pdo->prepare("SELECT room_id FROM contracts WHERE id = ?");
+        $stmt->execute([$data['id']]);
+        $contract = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$contract) {
+            responseJson(['status' => 'error', 'message' => 'Hợp đồng không tồn tại'], 404);
+            return;
+        }
+
+        $current_room_id = $contract['room_id'];
+
+
+        // Nếu room_id thay đổi, kiểm tra phòng mới có khả dụng không
+        if ((int)$data['room_id'] !== $current_room_id) {
+            // Kiểm tra phòng mới có sẵn không
             $stmt = $pdo->prepare("SELECT status FROM rooms WHERE id = ?");
             $stmt->execute([$data['room_id']]);
             $room = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -224,6 +249,22 @@ function updateContract() {
                 responseJson(['status' => 'error', 'message' => 'Phòng không khả dụng'], 400);
                 return;
             }
+
+            // Cập nhật trạng thái phòng hiện tại về 'available'
+            $stmt = $pdo->prepare("UPDATE rooms SET status = 'available' WHERE id = ?");
+            $stmt->execute([$current_room_id]);
+
+            // Cập nhật trạng thái phòng mới về 'occupied'
+            $stmt = $pdo->prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?");
+            $stmt->execute([$data['room_id']]);
+
+            // Cập nhật room_occupants: xóa người thuê khỏi phòng cũ
+            $stmt = $pdo->prepare("UPDATE room_occupants SET deleted_at = NOW() WHERE room_id = ? AND user_id = ?");
+            $stmt->execute([$current_room_id, $data['user_id']]);
+
+            // Thêm người thuê vào phòng mới
+            $stmt = $pdo->prepare("INSERT INTO room_occupants (room_id, user_id, created_at) VALUES (?, ?, NOW())");
+            $stmt->execute([$data['room_id'], $data['user_id']]);
         }
 
         // Cập nhật hợp đồng
@@ -244,15 +285,10 @@ function updateContract() {
             $data['id']
         ]);
 
-        // Cập nhật trạng thái phòng
-        if ($data['room_id'] !== $data['current_room_id']) {
-            $stmt = $pdo->prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?");
-            $stmt->execute([$data['room_id']]);
-            $stmt = $pdo->prepare("UPDATE rooms SET status = 'available' WHERE id = ?");
-            $stmt->execute([$data['current_room_id']]);
-        }
-
+        // Gửi thông báo
         createNotification($pdo, $data['user_id'], "Hợp đồng ID {$data['id']} đã được cập nhật.");
+
+        // Trả về kết quả thành công
         responseJson(['status' => 'success', 'message' => 'Cập nhật hợp đồng thành công', 'data' => $data]);
     } catch (PDOException $e) {
         error_log("Lỗi cập nhật hợp đồng: " . $e->getMessage());
@@ -260,25 +296,30 @@ function updateContract() {
     }
 }
 
-// Xóa hợp đồng
+
+// Xóa hợp đồng (xóa mềm)
 function deleteContract() {
     $pdo = getDB();
     $user = verifyJWT();
     $user_id = $user['user_id'];
     $role = $user['role'];
 
+    // Kiểm tra quyền người dùng
     if ($role !== 'admin' && $role !== 'owner') {
         responseJson(['status' => 'error', 'message' => 'Không có quyền xóa hợp đồng'], 403);
         return;
     }
 
+    // Nhận dữ liệu đầu vào
     $input = json_decode(file_get_contents('php://input'), true);
     validateRequiredFields($input, ['id']);
     $contract_id = (int)$input['id'];
 
     try {
+        // Kiểm tra hợp đồng có tồn tại
         checkResourceExists($pdo, 'contracts', $contract_id);
 
+        // Kiểm tra quyền xóa hợp đồng nếu người dùng là owner
         if ($role === 'owner') {
             $stmt = $pdo->prepare("
                 SELECT 1 
@@ -293,23 +334,119 @@ function deleteContract() {
             }
         }
 
-        // Lấy room_id trước khi xóa
+        // Lấy thông tin hợp đồng trước khi xóa
         $stmt = $pdo->prepare("SELECT room_id, user_id FROM contracts WHERE id = ?");
         $stmt->execute([$contract_id]);
         $contract = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // Xóa hợp đồng (các bảng liên quan như payments, invoices sẽ tự động xóa do ON DELETE CASCADE)
-        $stmt = $pdo->prepare("DELETE FROM contracts WHERE id = ?");
+        if (!$contract) {
+            responseJson(['status' => 'error', 'message' => 'Hợp đồng không tồn tại'], 404);
+            return;
+        }
+
+        // Bắt đầu giao dịch
+        $pdo->beginTransaction();
+
+        // 1. Cập nhật trạng thái hợp đồng thành 'deleted' và đánh dấu thời gian xóa
+        $stmt = $pdo->prepare("UPDATE contracts SET status = 'deleted', deleted_at = NOW() WHERE id = ?");
         $stmt->execute([$contract_id]);
 
-        // Cập nhật trạng thái phòng
+        // 2. Cập nhật trạng thái phòng thành 'available'
         $stmt = $pdo->prepare("UPDATE rooms SET status = 'available' WHERE id = ?");
         $stmt->execute([$contract['room_id']]);
 
+        // 3. Đánh dấu người thuê phòng (room_occupants) là đã xóa
+        $stmt = $pdo->prepare("UPDATE room_occupants SET deleted_at = NOW() WHERE room_id = ?");
+        $stmt->execute([$contract['room_id']]);
+
+        // 4. Gửi thông báo cho người thuê
         createNotification($pdo, $contract['user_id'], "Hợp đồng ID $contract_id đã bị xóa.");
+
+        // Cam kết giao dịch
+        $pdo->commit();
+
+        // Trả về thông báo thành công
         responseJson(['status' => 'success', 'message' => 'Xóa hợp đồng thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi xóa hợp đồng` đồng: " . $e->getMessage());
+        // Quay lại giao dịch trong trường hợp lỗi
+        $pdo->rollBack();
+        error_log("Lỗi xóa hợp đồng: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+    }
+}
+
+
+// Kết thúc hợp đồng
+function endContract() {
+    $pdo = getDB();
+    $user = verifyJWT();
+    $user_id = $user['user_id'];
+    $role = $user['role'];
+
+    // Kiểm tra quyền của người dùng
+    if (!in_array($role, ['admin', 'owner', 'employee'])) {
+        responseJson(['status' => 'error', 'message' => 'Không có quyền kết thúc hợp đồng'], 403);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    validateRequiredFields($input, ['id']);
+    $contract_id = (int)$input['id'];
+
+    try {
+        // Lấy thông tin hợp đồng
+        $stmt = $pdo->prepare("SELECT room_id, user_id, status FROM contracts WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$contract_id]);
+        $contract = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$contract) {
+            responseJson(['status' => 'error', 'message' => 'Hợp đồng không tồn tại hoặc đã bị xóa'], 404);
+            return;
+        }
+
+        $room_id = $contract['room_id'];
+        $tenant_id = $contract['user_id'];
+
+        // Kiểm tra quyền của owner/employee
+        if ($role === 'owner' || $role === 'employee') {
+            $stmt = $pdo->prepare("
+                SELECT 1 FROM contracts c
+                JOIN branches b ON c.branch_id = b.id
+                WHERE c.id = ? AND (b.owner_id = ? OR EXISTS (
+                    SELECT 1 FROM employee_assignments ea WHERE ea.branch_id = b.id AND ea.employee_id = ?
+                )) AND c.deleted_at IS NULL
+            ");
+            $stmt->execute([$contract_id, $user_id, $user_id]);
+            if (!$stmt->fetch()) {
+                responseJson(['status' => 'error', 'message' => 'Không có quyền kết thúc hợp đồng này'], 403);
+                return;
+            }
+        }
+
+        $pdo->beginTransaction();
+
+        // 1. Cập nhật hợp đồng thành 'ended' và xóa mềm
+        $stmt = $pdo->prepare("UPDATE contracts SET status = 'ended', end_date = NOW(), deleted_at = NOW() WHERE id = ?");
+        $stmt->execute([$contract_id]);
+
+        // 2. Cập nhật phòng thành available và xóa mềm
+        $stmt = $pdo->prepare("UPDATE rooms SET status = 'available', deleted_at = NOW() WHERE id = ?");
+        $stmt->execute([$room_id]);
+
+        // 3. Xóa người ở cùng (nếu có) - xóa mềm
+        $stmt = $pdo->prepare("UPDATE room_occupants SET deleted_at = NOW() WHERE room_id = ?");
+        $stmt->execute([$room_id]);
+
+        $pdo->commit();
+
+        // 4. Gửi thông báo cho khách hàng
+        createNotification($pdo, $tenant_id, "Hợp đồng ID $contract_id đã được kết thúc. Cảm ơn bạn đã sử dụng dịch vụ!");
+
+        responseJson(['status' => 'success', 'message' => 'Trả phòng thành công']);
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        error_log("Lỗi kết thúc hợp đồng (contract ID $contract_id): " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

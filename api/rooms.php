@@ -52,16 +52,29 @@ function getRooms() {
 
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
-        SELECT r.id, r.branch_id, r.type_id, r.name, r.price, r.status, r.created_at, rt.name AS type_name, b.name AS branch_name
+        SELECT 
+            r.id, 
+            r.branch_id, 
+            r.type_id, 
+            r.name, 
+            r.price, 
+            r.status, 
+            r.created_at, 
+            rt.name AS type_name, 
+            b.name AS branch_name,
+            c.id AS contract_id
         FROM rooms r
         JOIN room_types rt ON r.type_id = rt.id
         JOIN branches b ON r.branch_id = b.id
+        LEFT JOIN contracts c ON r.id = c.room_id AND c.status IN ('active', 'expired', 'ended', 'cancelled') 
+        AND c.end_date IS NULL 
         $whereClause
         LIMIT $limit OFFSET $offset
     ";
 
     try {
-        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM rooms r JOIN room_types rt ON r.type_id = rt.id JOIN branches b ON r.branch_id = b.id $whereClause");
+        // Cập nhật COUNT query để tính số lượng phòng
+        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM rooms r JOIN room_types rt ON r.type_id = rt.id JOIN branches b ON r.branch_id = b.id LEFT JOIN contracts c ON r.id = c.room_id $whereClause");
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
         $totalPages = ceil($totalRecords / $limit);
@@ -85,6 +98,7 @@ function getRooms() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
+
 
 // Tạo phòng
 function createRoom() {
@@ -210,48 +224,7 @@ function updateRoomStatus() {
     }
 }
 
-// Tạo hợp đồng
-function createContract() {
-    $pdo = getDB();
-    $user = verifyJWT();
-    $user_id = $user['user_id'];
-    $role = $user['role'];
 
-    if ($role !== 'admin' && $role !== 'owner' && $role !== 'employee') {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền tạo hợp đồng'], 403);
-        return;
-    }
-
-    $input = json_decode(file_get_contents('php://input'), true);
-    validateRequiredFields($input, ['room_id', 'user_id', 'start_date', 'end_date']);
-    $data = sanitizeInput($input);
-
-    try {
-        checkResourceExists($pdo, 'rooms', $data['room_id']);
-        checkResourceExists($pdo, 'users', $data['user_id']);
-        if ($role === 'owner' || $role === 'employee') {
-            $stmt = $pdo->prepare("SELECT 1 FROM rooms r JOIN branches b ON r.branch_id = b.id WHERE r.id = ? AND b.owner_id = ?");
-            $stmt->execute([$data['room_id'], $user_id]);
-            if (!$stmt->fetch()) {
-                responseJson(['status' => 'error', 'message' => 'Không có quyền tạo hợp đồng cho phòng này'], 403);
-                return;
-            }
-        }
-        $stmt = $pdo->prepare("INSERT INTO contracts (room_id, user_id, start_date, end_date, status, created_at, created_by, branch_id) VALUES (?, ?, ?, ?, 'active', NOW(), ?, (SELECT branch_id FROM rooms WHERE id = ?))");
-        $stmt->execute([$data['room_id'], $data['user_id'], $data['start_date'], $data['end_date'], $user_id, $data['room_id']]);
-        $contractId = $pdo->lastInsertId();
-
-        // Cập nhật trạng thái phòng thành occupied
-        $stmt = $pdo->prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?");
-        $stmt->execute([$data['room_id']]);
-
-        createNotification($pdo, $data['user_id'], "Hợp đồng thuê phòng ID $contractId đã được tạo.");
-        responseJson(['status' => 'success', 'message' => 'Tạo hợp đồng thành công']);
-    } catch (PDOException $e) {
-        error_log("Lỗi tạo hợp đồng: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
-    }
-}
 function deleteRoom() {
     $pdo = getDB();
     $user = verifyJWT();

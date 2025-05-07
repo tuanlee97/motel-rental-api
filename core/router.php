@@ -37,6 +37,15 @@ function handleApiRequest($method, $uri) {
     'PUT:rooms/([0-9]+)' => ['file' => '../api/rooms.php', 'handler' => 'updateRoom', 'middleware' => 'auth:owner'],
     'PATCH:rooms/([0-9]+)' => ['file' => '../api/rooms.php', 'handler' => 'patchRoom', 'middleware' => 'auth:owner'],
     'DELETE:rooms/([0-9]+)' => ['file' => '../api/rooms.php', 'handler' => 'deleteRoom', 'middleware' => 'auth:owner'],
+
+    // Room Occupants
+    'GET:room_occupants' => ['file' => '../api/room_occupants.php', 'handler' => 'getOccupantsByRoom', 'middleware' => 'auth:admin,owner,employee'],
+    'POST:room_occupants' => ['file' => '../api/room_occupants.php', 'handler' => 'createRoomOccupant', 'middleware' => 'auth:owner,employee'],
+    // 'GET:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'getRoomOccupantById', 'middleware' => 'auth:admin,owner,employee,customer'],
+    // 'PUT:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'updateRoomOccupant', 'middleware' => 'auth:owner,employee'],
+    // 'PATCH:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'patchRoomOccupant', 'middleware' => 'auth:owner,employee'],
+    // 'DELETE:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'deleteRoomOccupant', 'middleware' => 'auth:owner,employee'],
+
     // Room Types
     'GET:room_types' => ['file' => '../api/room_types.php', 'handler' => 'getRoomTypes', 'middleware' => null],
     'POST:room_types' => ['file' => '../api/room_types.php', 'handler' => 'createRoomType', 'middleware' => 'auth:owner'],
@@ -87,7 +96,7 @@ function handleApiRequest($method, $uri) {
     'POST:contracts' => ['file' => '../api/contracts.php', 'handler' => 'createContract', 'middleware' => 'auth:owner,employee'],
     'GET:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'getContractById', 'middleware' => 'auth:admin,owner,employee,customer'],
     'PUT:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'updateContract', 'middleware' => 'auth:owner,employee'],
-    // 'PATCH:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'patchContract', 'middleware' => 'auth:owner,employee'],
+    'POST:contracts/end' => ['file' => '../api/contracts.php', 'handler' => 'endContract', 'middleware' => 'auth:admin,owner,employee'],
     'DELETE:contracts/([0-9]+)' => ['file' => '../api/contracts.php', 'handler' => 'deleteContract', 'middleware' => 'auth:owner'],
     // Payments
     'GET:payments' => ['file' => '../api/payments.php', 'handler' => 'getPayments', 'middleware' => 'auth:admin,owner,employee,customer'],
@@ -103,13 +112,6 @@ function handleApiRequest($method, $uri) {
     'PUT:invoices/([0-9]+)' => ['file' => '../api/invoices.php', 'handler' => 'updateInvoice', 'middleware' => 'auth:owner,employee'],
     'PATCH:invoices/([0-9]+)' => ['file' => '../api/invoices.php', 'handler' => 'patchInvoice', 'middleware' => 'auth:owner,employee'],
     'DELETE:invoices/([0-9]+)' => ['file' => '../api/invoices.php', 'handler' => 'deleteInvoice', 'middleware' => 'auth:owner'],
-    // Room Occupants
-    'GET:room_occupants' => ['file' => '../api/room_occupants.php', 'handler' => 'getRoomOccupants', 'middleware' => 'auth:admin,owner,employee,customer'],
-    'POST:room_occupants' => ['file' => '../api/room_occupants.php', 'handler' => 'createRoomOccupant', 'middleware' => 'auth:owner,employee'],
-    'GET:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'getRoomOccupantById', 'middleware' => 'auth:admin,owner,employee,customer'],
-    'PUT:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'updateRoomOccupant', 'middleware' => 'auth:owner,employee'],
-    'PATCH:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'patchRoomOccupant', 'middleware' => 'auth:owner,employee'],
-    'DELETE:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'deleteRoomOccupant', 'middleware' => 'auth:owner,employee'],
     // Employee Assignments
     'GET:employee_assignments' => ['file' => '../api/employee_assignments.php', 'handler' => 'getEmployeeAssignments', 'middleware' => 'auth:owner'],
     'POST:employee_assignments' => ['file' => '../api/employee_assignments.php', 'handler' => 'createEmployeeAssignment', 'middleware' => 'auth:owner,employee'],
