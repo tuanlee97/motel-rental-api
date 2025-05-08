@@ -42,9 +42,9 @@ function handleApiRequest($method, $uri) {
     'GET:room_occupants' => ['file' => '../api/room_occupants.php', 'handler' => 'getOccupantsByRoom', 'middleware' => 'auth:admin,owner,employee'],
     'POST:room_occupants' => ['file' => '../api/room_occupants.php', 'handler' => 'createRoomOccupant', 'middleware' => 'auth:owner,employee'],
     // 'GET:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'getRoomOccupantById', 'middleware' => 'auth:admin,owner,employee,customer'],
-    // 'PUT:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'updateRoomOccupant', 'middleware' => 'auth:owner,employee'],
+    'PUT:room_occupants' => ['file' => '../api/room_occupants.php', 'handler' => 'updateRoomOccupants', 'middleware' => 'auth:admin,owner,employee'],
     // 'PATCH:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'patchRoomOccupant', 'middleware' => 'auth:owner,employee'],
-    // 'DELETE:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'deleteRoomOccupant', 'middleware' => 'auth:owner,employee'],
+    'DELETE:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'deleteRoomOccupant', 'middleware' => 'auth:admin,owner,employee'],
 
     // Room Types
     'GET:room_types' => ['file' => '../api/room_types.php', 'handler' => 'getRoomTypes', 'middleware' => null],
