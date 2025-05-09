@@ -131,6 +131,8 @@ CREATE TABLE IF NOT EXISTS utility_usage (
     service_id INT NOT NULL,
     month VARCHAR(7) NOT NULL,
     usage_amount DECIMAL(10,2) NOT NULL,
+    old_reading DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    new_reading DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     custom_price DECIMAL(10,2) NULL,
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
