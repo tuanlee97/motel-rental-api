@@ -64,13 +64,47 @@ function handleApiRequest($method, $uri) {
     'PUT:employees/([0-9]+)' => ['file' => '../api/employees.php', 'handler' => 'updateEmployee', 'middleware' => 'auth:owner,employee'],
     'PATCH:employees/([0-9]+)' => ['file' => '../api/employees.php', 'handler' => 'patchEmployee', 'middleware' => 'auth:owner,employee'],
     'DELETE:employees/([0-9]+)' => ['file' => '../api/employees.php', 'handler' => 'deleteEmployee', 'middleware' => 'auth:owner,employee'],
-    // Utility Usage
-    'GET:utility_usage' => ['file' => '../api/utility_usage.php', 'handler' => 'getUtilityUsage', 'middleware' => 'auth:admin,owner,employee,customer'],
-    'POST:utility_usage' => ['file' => '../api/utility_usage.php', 'handler' => 'createUtilityUsage', 'middleware' => 'auth:owner,employee'],
-    'GET:utility_usage/([0-9]+)' => ['file' => '../api/utility_usage.php', 'handler' => 'getUtilityUsageById', 'middleware' => 'auth:admin,owner,employee,customer'],
-    'PUT:utility_usage/([0-9]+)' => ['file' => '../api/utility_usage.php', 'handler' => 'updateUtilityUsage', 'middleware' => 'auth:owner,employee'],
-    'PATCH:utility_usage/([0-9]+)' => ['file' => '../api/utility_usage.php', 'handler' => 'patchUtilityUsage', 'middleware' => 'auth:owner,employee'],
-    'DELETE:utility_usage/([0-9]+)' => ['file' => '../api/utility_usage.php', 'handler' => 'deleteUtilityUsage', 'middleware' => 'auth:owner'],
+   // Utility Usage
+    'GET:utility_usage' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'getUtilityUsage',
+      'middleware' => 'auth:admin,owner,employee,customer'
+    ],
+    'POST:utility_usage' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'createUtilityUsage',
+      'middleware' => 'auth:owner,employee'
+    ],
+    'GET:utility_usage/([0-9]+)' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'getUtilityUsageById',
+      'middleware' => 'auth:admin,owner,employee,customer'
+    ],
+    'PUT:utility_usage/([0-9]+)' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'updateUtilityUsage',
+      'middleware' => 'auth:owner,employee'
+    ],
+    'DELETE:utility_usage/([0-9]+)' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'deleteUtilityUsage',
+      'middleware' => 'auth:owner'
+    ],
+    'GET:utility_usage/latest' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'getLatestUtilityReading',
+      'middleware' => 'auth:admin,owner,employee,customer'
+    ],
+    'GET:utility_usage/summary' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'getUtilityUsageSummary',
+      'middleware' => 'auth:admin,owner,employee,customer'
+    ],
+    'POST:utility_usage/bulk' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'createBulkUtilityUsage',
+      'middleware' => 'auth:owner,employee'
+    ],
     // Maintenance Requests
     'GET:maintenance_requests' => ['file' => '../api/maintenance_requests.php', 'handler' => 'getMaintenanceRequests', 'middleware' => 'auth:admin,owner,employee,customer'],
     'POST:maintenance_requests' => ['file' => '../api/maintenance_requests.php', 'handler' => 'createMaintenanceRequest', 'middleware' => 'auth:admin,owner,employee,customer'],

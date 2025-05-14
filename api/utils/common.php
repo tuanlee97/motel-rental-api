@@ -5,7 +5,8 @@ require_once __DIR__ . '/../../core/auth.php';
 
 function validateRequiredFields($input, $fields) {
     foreach ($fields as $field) {
-        if (empty($input[$field])) {
+        // Kiểm tra trường có tồn tại và không phải null
+        if (!isset($input[$field]) || $input[$field] === null) {
             responseJson(['status' => 'error', 'message' => "Thiếu trường $field"], 400);
         }
     }

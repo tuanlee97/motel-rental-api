@@ -189,6 +189,7 @@ CREATE TABLE IF NOT EXISTS room_occupants (
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    relation VARCHAR(255),
     deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,

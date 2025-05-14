@@ -90,11 +90,11 @@ INSERT INTO services (branch_id, name, price, unit, type) VALUES
 (2, 'Internet', 150000, 'tháng', 'other');
 
 -- Thêm dữ liệu vào bảng utility_usage
-INSERT INTO utility_usage (room_id, service_id, month, usage_amount, custom_price, recorded_at) VALUES
-(1, 1, '2025-01', 100, NULL, '2025-01-31 10:00:00'),
-(1, 2, '2025-01', 5, NULL, '2025-01-31 10:00:00'),
-(4, 3, '2025-02', 120, NULL, '2025-02-28 10:00:00'),
-(4, 4, '2025-02', 6, NULL, '2025-02-28 10:00:00');
+INSERT INTO utility_usage (room_id, service_id, month, usage_amount, old_reading, new_reading,custom_price, recorded_at) VALUES
+(1, 1, '2025-01', 100, 0, 100,NULL, '2025-01-31 10:00:00'),
+(1, 2, '2025-01', 5, 0, 5,NULL, '2025-01-31 10:00:00'),
+(4, 3, '2025-02', 120, 0, 120, NULL, '2025-02-28 10:00:00'),
+(4, 4, '2025-02', 6, 0, 6 ,NULL, '2025-02-28 10:00:00');
 
 -- Thêm dữ liệu vào bảng maintenance_requests
 INSERT INTO maintenance_requests (room_id, description, status, created_at, created_by) VALUES
