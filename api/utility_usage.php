@@ -19,16 +19,16 @@ function createUtilityUsage() {
 
     // Nhận dữ liệu đầu vào
     $input = json_decode(file_get_contents('php://input'), true);
-    error_log("Input data: " . json_encode($input));
-    validateRequiredFields($input, ['room_id', 'service_id', 'month', 'usage_amount', 'old_reading', 'new_reading']);
+
+    validateRequiredFields($input, ['room_id', 'service_id', 'month', 'old_reading', 'new_reading']);
     $data = sanitizeInput($input);
     $room_id = (int)$data['room_id'];
     $service_id = (int)$data['service_id'];
     $month = $data['month'];
-    $usage_amount = (float)$data['usage_amount'];
+    
     $old_reading = (float)$data['old_reading'];
     $new_reading = (float)$data['new_reading'];
-
+    $usage_amount = $new_reading - $old_reading;
     // Kiểm tra định dạng tháng (YYYY-MM)
     if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
         responseJson(['status' => 'error', 'message' => 'Định dạng tháng không hợp lệ (YYYY-MM)'], 400);
@@ -210,7 +210,7 @@ function getUtilityUsage() {
     // Truy vấn danh sách
     $query = "
     SELECT u.id, u.room_id, u.service_id, u.month, u.usage_amount, u.old_reading, u.new_reading, u.recorded_at,
-        s.name AS service_name, r.name AS room_name, b.name AS branch_name
+        s.name AS service_name, r.name AS room_name, b.name AS branch_name, b.id AS branch_id
     FROM utility_usage u
     JOIN services s ON u.service_id = s.id
     JOIN rooms r ON u.room_id = r.id
@@ -274,12 +274,12 @@ function updateUtilityUsage($usage_id) {
 
     // Nhận dữ liệu đầu vào
     $input = json_decode(file_get_contents('php://input'), true);
-    validateRequiredFields($input, ['usage_amount', 'old_reading', 'new_reading']);
+    validateRequiredFields($input, ['old_reading', 'new_reading']);
     $data = sanitizeInput($input);
-    $usage_amount = (float)$data['usage_amount'];
+    
     $old_reading = (float)$data['old_reading'];
     $new_reading = (float)$data['new_reading'];
-
+    $usage_amount = $new_reading - $old_reading;
     // Kiểm tra usage_amount, old_reading, new_reading không âm
     if ($usage_amount < 0) {
         responseJson(['status' => 'error', 'message' => 'Số lượng sử dụng không được âm'], 400);
@@ -633,125 +633,204 @@ function createBulkUtilityUsage() {
 
     // Nhận dữ liệu đầu vào
     $input = json_decode(file_get_contents('php://input'), true);
-    if (!is_array($input) || empty($input)) {
-        responseJson(['status' => 'error', 'message' => 'Dữ liệu đầu vào phải là mảng các bản ghi'], 400);
+    if (!isset($input['utilities']) || !is_array($input['utilities']) || empty($input['utilities'])) {
+        responseJson(['status' => 'error', 'message' => 'Dữ liệu đầu vào phải là mảng utilities không rỗng'], 400);
         return;
     }
 
+    $utilities = $input['utilities'];
     $valid_entries = [];
-    foreach ($input as $entry) {
-        validateRequiredFields($entry, ['room_id', 'service_id', 'month', 'usage_amount', 'old_reading', 'new_reading']);
-        $data = sanitizeInput($entry);
-        $room_id = (int)$data['room_id'];
-        $service_id = (int)$data['service_id'];
-        $month = $data['month'];
-        $usage_amount = (float)$data['usage_amount'];
-        $old_reading = (float)$data['old_reading'];
-        $new_reading = (float)$data['new_reading'];
-
-        // Kiểm tra định dạng và giá trị
-        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
-            responseJson(['status' => 'error', 'message' => 'Định dạng tháng không hợp lệ (YYYY-MM)'], 400);
-            return;
-        }
-        if ($usage_amount < 0 || $old_reading < 0 || $new_reading < 0) {
-            responseJson(['status' => 'error', 'message' => 'Giá trị không được âm'], 400);
-            return;
-        }
-        if ($new_reading < $old_reading) {
-            responseJson(['status' => 'error', 'message' => 'Số mới phải lớn hơn hoặc bằng số cũ'], 400);
-            return;
-        }
-        if (abs($usage_amount - ($new_reading - $old_reading)) > 0.01) {
-            responseJson(['status' => 'error', 'message' => 'Số lượng sử dụng phải bằng số mới trừ số cũ'], 400);
-            return;
-        }
-
-        $valid_entries[] = [
-            'room_id' => $room_id,
-            'service_id' => $service_id,
-            'month' => $month,
-            'usage_amount' => $usage_amount,
-            'old_reading' => $old_reading,
-            'new_reading' => $new_reading
-        ];
-    }
+    $errors = [];
+    $created = [];
 
     try {
+        // Bắt đầu giao dịch
         $pdo->beginTransaction();
 
-        foreach ($valid_entries as $entry) {
-            $room_id = $entry['room_id'];
-            $service_id = $entry['service_id'];
-            $month = $entry['month'];
-            $usage_amount = $entry['usage_amount'];
-            $old_reading = $entry['old_reading'];
-            $new_reading = $entry['new_reading'];
+        // Tải danh sách phòng và dịch vụ để kiểm tra hàng loạt
+        $room_ids = array_unique(array_column($utilities, 'room_id'));
+        $service_ids = array_unique(array_column($utilities, 'service_id'));
 
-            // Kiểm tra phòng và dịch vụ tồn tại
-            checkResourceExists($pdo, 'rooms', $room_id);
-            checkResourceExists($pdo, 'services', $service_id);
+        // Kiểm tra phòng tồn tại
+        $stmt = $pdo->prepare("SELECT id FROM rooms WHERE id IN (" . implode(',', array_fill(0, count($room_ids), '?')) . ") AND deleted_at IS NULL");
+        $stmt->execute($room_ids);
+        $valid_rooms = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id');
 
-            // Kiểm tra dịch vụ là điện hoặc nước
-            $stmt = $pdo->prepare("SELECT type, name FROM services WHERE id = ? AND deleted_at IS NULL");
-            $stmt->execute([$service_id]);
-            $service = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$service || !in_array($service['type'], ['electricity', 'water'])) {
-                responseJson(['status' => 'error', 'message' => 'Dịch vụ phải là điện hoặc nước'], 400);
-                return;
-            }
+        // Kiểm tra dịch vụ tồn tại và là điện/nước
+        $stmt = $pdo->prepare("SELECT id, name, type FROM services WHERE id IN (" . implode(',', array_fill(0, count($service_ids), '?')) . ") AND deleted_at IS NULL");
+        $stmt->execute($service_ids);
+        $services = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $valid_services = array_column($services, 'id');
+        $service_map = array_column($services, null, 'id');
 
-            // Kiểm tra quyền owner/employee
-            if ($role === 'owner' || $role === 'employee') {
-                $stmt = $pdo->prepare("
-                    SELECT 1 FROM rooms r
-                    JOIN branches b ON r.branch_id = b.id
-                    WHERE r.id = ? AND (b.owner_id = ? OR EXISTS (
-                        SELECT 1 FROM employee_assignments ea WHERE ea.branch_id = b.id AND ea.employee_id = ?
-                    ))
-                ");
-                $stmt->execute([$room_id, $user_id, $user_id]);
-                if (!$stmt->fetch()) {
-                    responseJson(['status' => 'error', 'message' => 'Không có quyền nhập liệu cho phòng này'], 403);
-                    return;
-                }
-            }
-
-            // Kiểm tra bản ghi đã tồn tại
+        // Kiểm tra quyền owner/employee
+        $allowed_room_ids = [];
+        if ($role === 'owner' || $role === 'employee') {
             $stmt = $pdo->prepare("
-                SELECT id FROM utility_usage
-                WHERE room_id = ? AND service_id = ? AND month = ? AND deleted_at IS NULL
+                SELECT r.id FROM rooms r
+                JOIN branches b ON r.branch_id = b.id
+                WHERE r.id IN (" . implode(',', array_fill(0, count($room_ids), '?')) . ")
+                AND (b.owner_id = ? OR EXISTS (
+                    SELECT 1 FROM employee_assignments ea WHERE ea.branch_id = b.id AND ea.employee_id = ?
+                ))
             ");
-            $stmt->execute([$room_id, $service_id, $month]);
-            $existing_usage = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->execute(array_merge($room_ids, [$user_id, $user_id]));
+            $allowed_room_ids = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id');
+        } else {
+            $allowed_room_ids = $valid_rooms; // Admin có quyền trên tất cả phòng
+        }
 
-            if ($existing_usage) {
+        // Validate từng bản ghi
+        foreach ($utilities as $index => $entry) {
+            validateRequiredFields($entry, ['room_id', 'service_id', 'month', 'old_reading', 'new_reading']);
+            $data = sanitizeInput($entry);
+            $room_id = (int)$data['room_id'];
+            $service_id = (int)$data['service_id'];
+            $month = $data['month'];
+            $old_reading = (float)$data['old_reading'];
+            $new_reading = (float)$data['new_reading'];
+            $usage_amount = $new_reading - $old_reading;
+
+            // Kiểm tra định dạng và giá trị
+            if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Định dạng tháng không hợp lệ (YYYY-MM)";
+                continue;
+            }
+            if ($usage_amount < 0 || $old_reading < 0 || $new_reading < 0) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Giá trị không được âm";
+                continue;
+            }
+            if ($new_reading < $old_reading) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Số mới phải lớn hơn hoặc bằng số cũ";
+                continue;
+            }
+            if (abs($usage_amount - ($new_reading - $old_reading)) > 0.01) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Số lượng sử dụng phải bằng số mới trừ số cũ";
+                continue;
+            }
+            if (!in_array($room_id, $valid_rooms)) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Phòng ID $room_id không tồn tại";
+                continue;
+            }
+            if (!in_array($service_id, $valid_services)) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Dịch vụ ID $service_id không tồn tại";
+                continue;
+            }
+            if (!in_array($service_map[$service_id]['type'], ['electricity', 'water'])) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Dịch vụ phải là điện hoặc nước";
+                continue;
+            }
+            if (!in_array($room_id, $allowed_room_ids)) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Không có quyền nhập liệu cho phòng ID $room_id";
+                continue;
+            }
+
+            $valid_entries[] = [
+                'room_id' => $room_id,
+                'service_id' => $service_id,
+                'month' => $month,
+                'usage_amount' => $usage_amount,
+                'old_reading' => $old_reading,
+                'new_reading' => $new_reading,
+                'service_name' => $service_map[$service_id]['name']
+            ];
+        }
+
+        if (!empty($errors)) {
+            $pdo->rollBack();
+            responseJson(['status' => 'error', 'message' => implode('; ', $errors)], 400);
+            return;
+        }
+
+        // Xử lý bản ghi tồn tại
+        $existing_keys = [];
+        if (!empty($valid_entries)) {
+            $placeholders = implode(',', array_fill(0, count($valid_entries), '(?,?,?)'));
+            $stmt = $pdo->prepare("
+                SELECT room_id, service_id, month, id
+                FROM utility_usage
+                WHERE (room_id, service_id, month) IN ($placeholders)
+                AND deleted_at IS NULL
+            ");
+            $params = [];
+            foreach ($valid_entries as $entry) {
+                $params[] = $entry['room_id'];
+                $params[] = $entry['service_id'];
+                $params[] = $entry['month'];
+            }
+            $stmt->execute($params);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $key = "{$row['room_id']}-{$row['service_id']}-{$row['month']}";
+                $existing_keys[$key] = $row['id'];
+            }
+        }
+
+        // Cập nhật hoặc tạo mới
+        foreach ($valid_entries as $entry) {
+            $key = "{$entry['room_id']}-{$entry['service_id']}-{$entry['month']}";
+            if (isset($existing_keys[$key])) {
+                // Cập nhật bản ghi
                 $stmt = $pdo->prepare("
                     UPDATE utility_usage
                     SET usage_amount = ?, old_reading = ?, new_reading = ?, recorded_at = NOW()
                     WHERE id = ?
                 ");
-                $stmt->execute([$usage_amount, $old_reading, $new_reading, $existing_usage['id']]);
+                $stmt->execute([$entry['usage_amount'], $entry['old_reading'], $entry['new_reading'], $existing_keys[$key]]);
+                $usage_id = $existing_keys[$key];
+                $action = 'cập nhật';
             } else {
+                // Tạo mới bản ghi
                 $stmt = $pdo->prepare("
                     INSERT INTO utility_usage (room_id, service_id, month, usage_amount, old_reading, new_reading, recorded_at)
                     VALUES (?, ?, ?, ?, ?, ?, NOW())
                 ");
-                $stmt->execute([$room_id, $service_id, $month, $usage_amount, $old_reading, $new_reading]);
+                $stmt->execute([
+                    $entry['room_id'],
+                    $entry['service_id'],
+                    $entry['month'],
+                    $entry['usage_amount'],
+                    $entry['old_reading'],
+                    $entry['new_reading']
+                ]);
+                $usage_id = $pdo->lastInsertId();
+                $action = 'nhập';
             }
+
+            // Lưu thông tin bản ghi đã xử lý
+            $created[] = [
+                'id' => $usage_id,
+                'room_id' => $entry['room_id'],
+                'service_id' => $entry['service_id'],
+                'month' => $entry['month'],
+                'usage_amount' => $entry['usage_amount'],
+                'old_reading' => $entry['old_reading'],
+                'new_reading' => $entry['new_reading'],
+                'service_name' => $entry['service_name']
+            ];
+
+            // Gửi thông báo
+            createNotification(
+                $pdo,
+                $user_id,
+                "Đã $action số {$entry['service_name']} (Số cũ: {$entry['old_reading']}, Số mới: {$entry['new_reading']}, Dùng: {$entry['usage_amount']}) cho phòng {$entry['room_id']}, tháng {$entry['month']}."
+            );
         }
 
+        // Cam kết giao dịch
         $pdo->commit();
 
         responseJson([
             'status' => 'success',
             'message' => 'Nhập hàng loạt số điện, nước thành công',
-            'data' => ['count' => count($valid_entries)]
+            'data' => [
+                'count' => count($created),
+                'created' => $created
+            ]
         ]);
     } catch (PDOException $e) {
         $pdo->rollBack();
         error_log("Lỗi nhập hàng loạt số điện, nước: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     }
 }
 ?>

@@ -75,6 +75,11 @@ function handleApiRequest($method, $uri) {
       'handler' => 'createUtilityUsage',
       'middleware' => 'auth:owner,employee'
     ],
+     'POST:utility_usage/bulk' => [
+      'file' => '../api/utility_usage.php',
+      'handler' => 'createBulkUtilityUsage',
+      'middleware' => 'auth:owner,employee'
+    ],
     'GET:utility_usage/([0-9]+)' => [
       'file' => '../api/utility_usage.php',
       'handler' => 'getUtilityUsageById',
