@@ -23,7 +23,7 @@ function getRooms() {
         $conditions[] = "r.branch_id = ?";
         $params[] = $branch_id;
     } elseif ($role === 'owner') {
-        $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL LIMIT 1");
         $stmt->execute([$user_id]);
         $branch_id = $stmt->fetchColumn();
         if ($branch_id) {
@@ -40,7 +40,7 @@ function getRooms() {
         }
     } else {
         if ($role !== 'admin') {
-            $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
+            $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
             $params[] = $user_id;
         }
     }
@@ -49,6 +49,10 @@ function getRooms() {
         $conditions[] = "r.status = ?";
         $params[] = $_GET['status'];
     }
+
+    $conditions[] = "r.deleted_at IS NULL";
+    $conditions[] = "rt.deleted_at IS NULL";
+    $conditions[] = "b.deleted_at IS NULL";
 
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
@@ -59,7 +63,8 @@ function getRooms() {
             r.name, 
             r.price, 
             r.status, 
-            r.created_at, 
+            r.created_at,
+            r.deleted_at, 
             rt.name AS type_name, 
             b.name AS branch_name,
             c.id AS contract_id
@@ -67,13 +72,12 @@ function getRooms() {
         JOIN room_types rt ON r.type_id = rt.id
         JOIN branches b ON r.branch_id = b.id
         LEFT JOIN contracts c ON r.id = c.room_id AND c.status IN ('active', 'expired', 'ended', 'cancelled') 
-        AND c.end_date IS NULL 
+        AND c.end_date IS NULL AND c.deleted_at IS NULL
         $whereClause
         LIMIT $limit OFFSET $offset
     ";
 
     try {
-        // Cập nhật COUNT query để tính số lượng phòng
         $countStmt = $pdo->prepare("SELECT COUNT(*) FROM rooms r JOIN room_types rt ON r.type_id = rt.id JOIN branches b ON r.branch_id = b.id LEFT JOIN contracts c ON r.id = c.room_id $whereClause");
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
@@ -99,7 +103,6 @@ function getRooms() {
     }
 }
 
-
 // Tạo phòng
 function createRoom() {
     $pdo = getDB();
@@ -118,7 +121,7 @@ function createRoom() {
     $data = sanitizeInput($input);
 
     if ($role === 'owner') {
-        $stmt = $pdo->prepare("SELECT 1 FROM branches WHERE id = ? AND owner_id = ?");
+        $stmt = $pdo->prepare("SELECT 1 FROM branches WHERE id = ? AND owner_id = ? AND deleted_at IS NULL");
         $stmt->execute([$data['branch_id'], $user_id]);
         if (!$stmt->fetch()) {
             responseJson(['status' => 'error', 'message' => 'Không có quyền tạo phòng cho chi nhánh này'], 403);
@@ -137,7 +140,8 @@ function createRoom() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-// Cập nhật thông tin phòng
+
+// Cập nhật thông tin phòng (bao gồm cả trạng thái)
 function updateRoom() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -154,18 +158,39 @@ function updateRoom() {
     // Lấy dữ liệu đầu vào từ request
     $input = json_decode(file_get_contents('php://input'), true);
     error_log("Input data: " . json_encode($input));
-    validateRequiredFields($input, ['branch_id', 'type_id', 'name']);
+
+    // Xác định các trường bắt buộc và tùy chọn
+    $requiredFields = [];
+    if (isset($input['status']) || isset($input['branch_id']) || isset($input['type_id']) || isset($input['name'])) {
+        $requiredFields = ['branch_id', 'type_id', 'name'];
+        validateRequiredFields($input, $requiredFields);
+    } elseif (isset($input['status'])) {
+        validateRequiredFields($input, ['status']);
+    } else {
+        responseJson(['status' => 'error', 'message' => 'Không có dữ liệu để cập nhật'], 400);
+        return;
+    }
+
     $data = sanitizeInput($input);
 
-    try {
-        // Kiểm tra sự tồn tại của phòng, chi nhánh và loại phòng
-        checkResourceExists($pdo, 'rooms', $room_id);
-        checkResourceExists($pdo, 'branches', $data['branch_id']);
-        checkResourceExists($pdo, 'room_types', $data['type_id']);
+    // Validate status nếu có
+    if (isset($data['status']) && !in_array($data['status'], ['available', 'occupied', 'maintenance'])) {
+        responseJson(['status' => 'error', 'message' => 'Trạng thái không hợp lệ'], 400);
+        return;
+    }
 
-        // Nếu người dùng là owner hoặc employee, kiểm tra quyền sở hữu chi nhánh
+    try {
+        // Kiểm tra sự tồn tại của phòng
+        $stmt = $pdo->prepare("SELECT 1 FROM rooms WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$room_id]);
+        if (!$stmt->fetch()) {
+            responseJson(['status' => 'error', 'message' => 'Phòng không tồn tại hoặc đã bị xóa'], 404);
+            return;
+        }
+
+        // Kiểm tra quyền sở hữu chi nhánh nếu là owner hoặc employee
         if ($role === 'owner' || $role === 'employee') {
-            $stmt = $pdo->prepare("SELECT 1 FROM rooms r JOIN branches b ON r.branch_id = b.id WHERE r.id = ? AND b.owner_id = ?");
+            $stmt = $pdo->prepare("SELECT 1 FROM rooms r JOIN branches b ON r.branch_id = b.id WHERE r.id = ? AND b.owner_id = ? AND r.deleted_at IS NULL AND b.deleted_at IS NULL");
             $stmt->execute([$room_id, $user_id]);
             if (!$stmt->fetch()) {
                 responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật phòng này'], 403);
@@ -173,9 +198,41 @@ function updateRoom() {
             }
         }
 
-        // Cập nhật thông tin phòng
-        $stmt = $pdo->prepare("UPDATE rooms SET branch_id = ?, type_id = ?, name = ?, price = ? WHERE id = ?");
-        $stmt->execute([$data['branch_id'], $data['type_id'], $data['name'], $data['price'] ?? 0, $room_id]);
+        // Chuẩn bị câu lệnh UPDATE
+        $setClause = [];
+        $params = [];
+        if (isset($data['branch_id'])) {
+            checkResourceExists($pdo, 'branches', $data['branch_id']);
+            $setClause[] = "branch_id = ?";
+            $params[] = $data['branch_id'];
+        }
+        if (isset($data['type_id'])) {
+            checkResourceExists($pdo, 'room_types', $data['type_id']);
+            $setClause[] = "type_id = ?";
+            $params[] = $data['type_id'];
+        }
+        if (isset($data['name'])) {
+            $setClause[] = "name = ?";
+            $params[] = $data['name'];
+        }
+        if (isset($data['price'])) {
+            $setClause[] = "price = ?";
+            $params[] = $data['price'] ?? 0;
+        }
+        if (isset($data['status'])) {
+            $setClause[] = "status = ?";
+            $params[] = $data['status'];
+        }
+
+        if (empty($setClause)) {
+            responseJson(['status' => 'error', 'message' => 'Không có trường nào để cập nhật'], 400);
+            return;
+        }
+
+        $params[] = $room_id;
+        $query = "UPDATE rooms SET " . implode(", ", $setClause) . " WHERE id = ? AND deleted_at IS NULL";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
 
         responseJson(['status' => 'success', 'message' => 'Cập nhật phòng thành công']);
     } catch (PDOException $e) {
@@ -183,48 +240,8 @@ function updateRoom() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-// Cập nhật trạng thái phòng
-function updateRoomStatus() {
-    $pdo = getDB();
-    $user = verifyJWT();
-    $user_id = $user['user_id'];
-    $role = $user['role'];
-    $room_id = getResourceIdFromUri('#/rooms/([0-9]+)#');
 
-    $input = json_decode(file_get_contents('php://input'), true);
-    validateRequiredFields($input, ['status']);
-    $status = in_array($input['status'], ['available', 'occupied', 'maintenance']) ? $input['status'] : null;
-
-    if (!$status) {
-        responseJson(['status' => 'error', 'message' => 'Trạng thái không hợp lệ'], 400);
-        return;
-    }
-
-    if ($role !== 'admin' && $role !== 'owner' && $role !== 'employee') {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật trạng thái phòng'], 403);
-        return;
-    }
-
-    try {
-        checkResourceExists($pdo, 'rooms', $room_id);
-        if ($role === 'owner' || $role === 'employee') {
-            $stmt = $pdo->prepare("SELECT 1 FROM rooms r JOIN branches b ON r.branch_id = b.id WHERE r.id = ? AND b.owner_id = ?");
-            $stmt->execute([$room_id, $user_id]);
-            if (!$stmt->fetch()) {
-                responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật phòng này'], 403);
-                return;
-            }
-        }
-        $stmt = $pdo->prepare("UPDATE rooms SET status = ? WHERE id = ?");
-        $stmt->execute([$status, $room_id]);
-        responseJson(['status' => 'success', 'message' => 'Cập nhật trạng thái phòng thành công']);
-    } catch (PDOException $e) {
-        error_log("Lỗi cập nhật trạng thái phòng ID $room_id: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
-    }
-}
-
-
+// Xóa mềm phòng
 function deleteRoom() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -240,11 +257,16 @@ function deleteRoom() {
 
     try {
         // Kiểm tra sự tồn tại của phòng
-        checkResourceExists($pdo, 'rooms', $room_id);
+        $stmt = $pdo->prepare("SELECT 1 FROM rooms WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$room_id]);
+        if (!$stmt->fetch()) {
+            responseJson(['status' => 'error', 'message' => 'Phòng không tồn tại hoặc đã bị xóa'], 404);
+            return;
+        }
 
         // Nếu là owner, kiểm tra quyền sở hữu chi nhánh
         if ($role === 'owner') {
-            $stmt = $pdo->prepare("SELECT 1 FROM rooms r JOIN branches b ON r.branch_id = b.id WHERE r.id = ? AND b.owner_id = ?");
+            $stmt = $pdo->prepare("SELECT 1 FROM rooms r JOIN branches b ON r.branch_id = b.id WHERE r.id = ? AND b.owner_id = ? AND r.deleted_at IS NULL AND b.deleted_at IS NULL");
             $stmt->execute([$room_id, $user_id]);
             if (!$stmt->fetch()) {
                 responseJson(['status' => 'error', 'message' => 'Không có quyền xóa phòng này'], 403);
@@ -255,21 +277,33 @@ function deleteRoom() {
         // Bắt đầu transaction để đảm bảo tính toàn vẹn dữ liệu
         $pdo->beginTransaction();
 
-        // Xóa các hợp đồng liên quan (nếu có)
-        $stmt = $pdo->prepare("DELETE FROM contracts WHERE room_id = ?");
+        // Xóa mềm các hợp đồng liên quan
+        $stmt = $pdo->prepare("UPDATE contracts SET deleted_at = NOW() WHERE room_id = ? AND deleted_at IS NULL");
         $stmt->execute([$room_id]);
 
-        // Xóa phòng
-        $stmt = $pdo->prepare("DELETE FROM rooms WHERE id = ?");
+        // Xóa mềm các bản ghi trong utility_usage
+        $stmt = $pdo->prepare("UPDATE utility_usage SET deleted_at = NOW() WHERE room_id = ? AND deleted_at IS NULL");
+        $stmt->execute([$room_id]);
+
+        // Xóa mềm các yêu cầu bảo trì
+        $stmt = $pdo->prepare("UPDATE maintenance_requests SET deleted_at = NOW() WHERE room_id = ? AND deleted_at IS NULL");
+        $stmt->execute([$room_id]);
+
+        // Xóa mềm các thông tin người ở trong phòng
+        $stmt = $pdo->prepare("UPDATE room_occupants SET deleted_at = NOW() WHERE room_id = ? AND deleted_at IS NULL");
+        $stmt->execute([$room_id]);
+
+        // Xóa mềm phòng
+        $stmt = $pdo->prepare("UPDATE rooms SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
         $stmt->execute([$room_id]);
 
         // Commit transaction
         $pdo->commit();
 
-        responseJson(['status' => 'success', 'message' => 'Xóa phòng thành công']);
+        responseJson(['status' => 'success', 'message' => 'Xóa mềm phòng thành công']);
     } catch (PDOException $e) {
         $pdo->rollBack();
-        error_log("Lỗi xóa phòng ID $room_id: " . $e->getMessage());
+        error_log("Lỗi xóa mềm phòng ID $room_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

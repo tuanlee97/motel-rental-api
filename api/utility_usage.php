@@ -20,18 +20,25 @@ function createUtilityUsage() {
     // Nhận dữ liệu đầu vào
     $input = json_decode(file_get_contents('php://input'), true);
 
-    validateRequiredFields($input, ['room_id', 'service_id', 'month', 'old_reading', 'new_reading']);
+    validateRequiredFields($input, ['room_id', 'service_id', 'month', 'old_reading', 'new_reading', 'record_date']);
     $data = sanitizeInput($input);
     $room_id = (int)$data['room_id'];
     $service_id = (int)$data['service_id'];
     $month = $data['month'];
-    
     $old_reading = (float)$data['old_reading'];
     $new_reading = (float)$data['new_reading'];
     $usage_amount = $new_reading - $old_reading;
+    $record_date = $data['record_date'];
+
     // Kiểm tra định dạng tháng (YYYY-MM)
     if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
         responseJson(['status' => 'error', 'message' => 'Định dạng tháng không hợp lệ (YYYY-MM)'], 400);
+        return;
+    }
+
+    // Kiểm tra định dạng record_date (YYYY-MM-DD)
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $record_date)) {
+        responseJson(['status' => 'error', 'message' => 'Định dạng ngày ghi nhận không hợp lệ (YYYY-MM-DD)'], 400);
         return;
     }
 
@@ -221,44 +228,41 @@ function getUtilityUsage() {
     ";
 
     try {
-    // Đếm tổng số bản ghi
-    $count_query = "
-        SELECT COUNT(*) FROM utility_usage u
-        JOIN rooms r ON u.room_id = r.id
-        $where_clause
-    ";
-    $count_stmt = $pdo->prepare($count_query);
-    $count_params = array_filter($params, function($key) {
-        return !in_array($key, ['limit', 'offset']);
-    }, ARRAY_FILTER_USE_KEY);
-    $count_stmt->execute($count_params);
-    $total_records = $count_stmt->fetchColumn();
-    $total_pages = ceil($total_records / $limit);
+        // Đếm tổng số bản ghi
+        $count_query = "
+            SELECT COUNT(*) FROM utility_usage u
+            JOIN rooms r ON u.room_id = r.id
+            $where_clause
+        ";
+        $count_stmt = $pdo->prepare($count_query);
+        $count_params = array_filter($params, function($key) {
+            return !in_array($key, ['limit', 'offset']);
+        }, ARRAY_FILTER_USE_KEY);
+        $count_stmt->execute($count_params);
+        $total_records = $count_stmt->fetchColumn();
+        $total_pages = ceil($total_records / $limit);
 
-    // // Log the SQL query and parameters
-    // error_log("SQL Query: $query");
-    // error_log("Parameters: " . json_encode($params));
+        // Lấy danh sách
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
+        $usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Lấy danh sách
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    responseJson([
-        'status' => 'success',
-        'data' => $usages,
-        'pagination' => [
-            'current_page' => $page,
-            'limit' => $limit,
-            'total_records' => $total_records,
-            'total_pages' => $total_pages
-        ]
-    ]);
+        responseJson([
+            'status' => 'success',
+            'data' => $usages,
+            'pagination' => [
+                'current_page' => $page,
+                'limit' => $limit,
+                'total_records' => $total_records,
+                'total_pages' => $total_pages
+            ]
+        ]);
     } catch (PDOException $e) {
-    error_log("Lỗi lấy danh sách số điện, nước: " . $e->getMessage());
-    responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+        error_log("Lỗi lấy danh sách số điện, nước: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
+
 // Cập nhật số điện, nước (PUT /utility_usage/{id})
 function updateUtilityUsage($usage_id) {
     $pdo = getDB();
@@ -274,12 +278,20 @@ function updateUtilityUsage($usage_id) {
 
     // Nhận dữ liệu đầu vào
     $input = json_decode(file_get_contents('php://input'), true);
-    validateRequiredFields($input, ['old_reading', 'new_reading']);
+    validateRequiredFields($input, ['old_reading', 'new_reading', 'record_date']);
     $data = sanitizeInput($input);
     
     $old_reading = (float)$data['old_reading'];
     $new_reading = (float)$data['new_reading'];
     $usage_amount = $new_reading - $old_reading;
+    $record_date = $data['record_date'];
+
+    // Kiểm tra định dạng record_date (YYYY-MM-DD)
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $record_date)) {
+        responseJson(['status' => 'error', 'message' => 'Định dạng ngày ghi nhận không hợp lệ (YYYY-MM-DD)'], 400);
+        return;
+    }
+
     // Kiểm tra usage_amount, old_reading, new_reading không âm
     if ($usage_amount < 0) {
         responseJson(['status' => 'error', 'message' => 'Số lượng sử dụng không được âm'], 400);
@@ -461,6 +473,7 @@ function deleteUtilityUsage($usage_id) {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
+
 // Lấy new_reading gần nhất (GET /utility_usage/latest)
 function getLatestUtilityReading() {
     $pdo = getDB();
@@ -633,6 +646,7 @@ function createBulkUtilityUsage() {
 
     // Nhận dữ liệu đầu vào
     $input = json_decode(file_get_contents('php://input'), true);
+
     if (!isset($input['utilities']) || !is_array($input['utilities']) || empty($input['utilities'])) {
         responseJson(['status' => 'error', 'message' => 'Dữ liệu đầu vào phải là mảng utilities không rỗng'], 400);
         return;
@@ -650,50 +664,96 @@ function createBulkUtilityUsage() {
         // Tải danh sách phòng và dịch vụ để kiểm tra hàng loạt
         $room_ids = array_unique(array_column($utilities, 'room_id'));
         $service_ids = array_unique(array_column($utilities, 'service_id'));
+        $branch_ids = array_unique(array_column($utilities, 'branch_id'));
 
-        // Kiểm tra phòng tồn tại
-        $stmt = $pdo->prepare("SELECT id FROM rooms WHERE id IN (" . implode(',', array_fill(0, count($room_ids), '?')) . ") AND deleted_at IS NULL");
+        // Kiểm tra phòng tồn tại và lấy branch_id
+        $stmt = $pdo->prepare("SELECT id, branch_id FROM rooms WHERE id IN (" . implode(',', array_fill(0, count($room_ids), '?')) . ") AND deleted_at IS NULL");
         $stmt->execute($room_ids);
-        $valid_rooms = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id');
+        $room_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $valid_rooms = array_column($room_data, 'id');
+        $room_branch_map = array_column($room_data, 'branch_id', 'id');
 
         // Kiểm tra dịch vụ tồn tại và là điện/nước
-        $stmt = $pdo->prepare("SELECT id, name, type FROM services WHERE id IN (" . implode(',', array_fill(0, count($service_ids), '?')) . ") AND deleted_at IS NULL");
+        $stmt = $pdo->prepare("SELECT id, name, type, branch_id FROM services WHERE id IN (" . implode(',', array_fill(0, count($service_ids), '?')) . ") AND deleted_at IS NULL");
         $stmt->execute($service_ids);
         $services = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $valid_services = array_column($services, 'id');
         $service_map = array_column($services, null, 'id');
 
-        // Kiểm tra quyền owner/employee
+        // Kiểm tra quyền truy cập dựa trên vai trò
         $allowed_room_ids = [];
-        if ($role === 'owner' || $role === 'employee') {
+        if ($role === 'admin') {
+            $allowed_room_ids = $valid_rooms; // Admin có quyền trên tất cả phòng
+        } elseif ($role === 'owner') {
+            // Owner chỉ được phép nhập cho các phòng trong chi nhánh của mình
             $stmt = $pdo->prepare("
-                SELECT r.id FROM rooms r
+                SELECT r.id 
+                FROM rooms r
                 JOIN branches b ON r.branch_id = b.id
                 WHERE r.id IN (" . implode(',', array_fill(0, count($room_ids), '?')) . ")
-                AND (b.owner_id = ? OR EXISTS (
-                    SELECT 1 FROM employee_assignments ea WHERE ea.branch_id = b.id AND ea.employee_id = ?
-                ))
+                AND b.owner_id = ?
+                AND r.deleted_at IS NULL
+                AND b.deleted_at IS NULL
             ");
-            $stmt->execute(array_merge($room_ids, [$user_id, $user_id]));
+            $stmt->execute(array_merge($room_ids, [$user_id]));
             $allowed_room_ids = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id');
-        } else {
-            $allowed_room_ids = $valid_rooms; // Admin có quyền trên tất cả phòng
+        } elseif ($role === 'employee') {
+            // Employee chỉ được phép nhập cho các phòng trong chi nhánh được phân công
+            $stmt = $pdo->prepare("
+                SELECT r.id 
+                FROM rooms r
+                JOIN branches b ON r.branch_id = b.id
+                JOIN employee_assignments ea ON ea.branch_id = b.id
+                WHERE r.id IN (" . implode(',', array_fill(0, count($room_ids), '?')) . ")
+                AND ea.employee_id = ?
+                AND r.deleted_at IS NULL
+                AND b.deleted_at IS NULL
+            ");
+            $stmt->execute(array_merge($room_ids, [$user_id]));
+            $allowed_room_ids = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id');
+        }
+
+        // Kiểm tra hợp đồng hiện tại cho từng phòng trong kỳ
+        $contract_map = [];
+        foreach ($room_ids as $room_id) {
+            foreach ($utilities as $entry) {
+                if ($entry['room_id'] == $room_id) {
+                    $month = $entry['month'];
+                    $stmt = $pdo->prepare("
+                        SELECT id, start_date, end_date, status 
+                        FROM contracts 
+                        WHERE room_id = ? 
+                        AND ? BETWEEN DATE_FORMAT(start_date, '%Y-%m') AND DATE_FORMAT(end_date, '%Y-%m')
+                        AND status IN ('active', 'ended', 'cancelled')
+                        AND deleted_at IS NULL
+                    ");
+                    $stmt->execute([$room_id, $month]);
+                    $contracts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $contract_map[$room_id][$month] = $contracts;
+                }
+            }
         }
 
         // Validate từng bản ghi
         foreach ($utilities as $index => $entry) {
-            validateRequiredFields($entry, ['room_id', 'service_id', 'month', 'old_reading', 'new_reading']);
+            validateRequiredFields($entry, ['room_id', 'service_id', 'month', 'old_reading', 'new_reading', 'record_date']);
             $data = sanitizeInput($entry);
             $room_id = (int)$data['room_id'];
             $service_id = (int)$data['service_id'];
+            $branch_id = (int)$data['branch_id'];
             $month = $data['month'];
             $old_reading = (float)$data['old_reading'];
             $new_reading = (float)$data['new_reading'];
+            $record_date = $data['record_date'];
             $usage_amount = $new_reading - $old_reading;
 
             // Kiểm tra định dạng và giá trị
             if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
                 $errors[] = "Bản ghi " . ($index + 1) . ": Định dạng tháng không hợp lệ (YYYY-MM)";
+                continue;
+            }
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $record_date)) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Định dạng ngày ghi nhận không hợp lệ (YYYY-MM-DD)";
                 continue;
             }
             if ($usage_amount < 0 || $old_reading < 0 || $new_reading < 0) {
@@ -724,6 +784,39 @@ function createBulkUtilityUsage() {
                 $errors[] = "Bản ghi " . ($index + 1) . ": Không có quyền nhập liệu cho phòng ID $room_id";
                 continue;
             }
+            if ($room_branch_map[$room_id] != $branch_id) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Phòng ID $room_id không thuộc chi nhánh ID $branch_id";
+                continue;
+            }
+            if ($service_map[$service_id]['branch_id'] != $branch_id) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Dịch vụ ID $service_id không thuộc chi nhánh ID $branch_id";
+                continue;
+            }
+
+            // Kiểm tra hợp đồng cho phòng trong kỳ
+            $contracts = $contract_map[$room_id][$month] ?? [];
+            if (empty($contracts)) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Không có hợp đồng hợp lệ cho phòng ID $room_id trong kỳ $month";
+                continue;
+            }
+
+            // Kiểm tra chỉ số trước đó
+            $stmt = $pdo->prepare("
+                SELECT new_reading 
+                FROM utility_usage 
+                WHERE room_id = ? 
+                AND service_id = ? 
+                AND month < ? 
+                AND deleted_at IS NULL 
+                ORDER BY month DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([$room_id, $service_id, $month]);
+            $previous_reading = $stmt->fetchColumn();
+            if ($previous_reading !== false && $old_reading < $previous_reading) {
+                $errors[] = "Bản ghi " . ($index + 1) . ": Số cũ ($old_reading) phải lớn hơn hoặc bằng số mới trước đó ($previous_reading)";
+                continue;
+            }
 
             $valid_entries[] = [
                 'room_id' => $room_id,
@@ -732,7 +825,9 @@ function createBulkUtilityUsage() {
                 'usage_amount' => $usage_amount,
                 'old_reading' => $old_reading,
                 'new_reading' => $new_reading,
-                'service_name' => $service_map[$service_id]['name']
+                'record_date' => $record_date,
+                'service_name' => $service_map[$service_id]['name'],
+                'contracts' => $contracts
             ];
         }
 
@@ -766,10 +861,10 @@ function createBulkUtilityUsage() {
         }
 
         // Cập nhật hoặc tạo mới
-        foreach ($valid_entries as $entry) {
+        foreach ($valid_entries as $index => $entry) {
             $key = "{$entry['room_id']}-{$entry['service_id']}-{$entry['month']}";
             if (isset($existing_keys[$key])) {
-                // Cập nhật bản ghi
+                // Cập nhật bản ghi hiện có
                 $stmt = $pdo->prepare("
                     UPDATE utility_usage
                     SET usage_amount = ?, old_reading = ?, new_reading = ?, recorded_at = NOW()
@@ -805,6 +900,7 @@ function createBulkUtilityUsage() {
                 'usage_amount' => $entry['usage_amount'],
                 'old_reading' => $entry['old_reading'],
                 'new_reading' => $entry['new_reading'],
+                'record_date' => $entry['record_date'],
                 'service_name' => $entry['service_name']
             ];
 
@@ -814,6 +910,12 @@ function createBulkUtilityUsage() {
                 $user_id,
                 "Đã $action số {$entry['service_name']} (Số cũ: {$entry['old_reading']}, Số mới: {$entry['new_reading']}, Dùng: {$entry['usage_amount']}) cho phòng {$entry['room_id']}, tháng {$entry['month']}."
             );
+        }
+
+        if (!empty($errors)) {
+            $pdo->rollBack();
+            responseJson(['status' => 'error', 'message' => implode('; ', $errors)], 400);
+            return;
         }
 
         // Cam kết giao dịch
