@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
     role ENUM('admin', 'owner', 'employee', 'customer') DEFAULT 'customer',
     status ENUM('active', 'inactive', 'suspended') DEFAULT 'inactive',
     provider ENUM('email', 'google') DEFAULT 'email',
+    bank_details JSON DEFAULT NULL,
+    qr_code_url VARCHAR(255) DEFAULT NULL,
     created_by INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL DEFAULT NULL,

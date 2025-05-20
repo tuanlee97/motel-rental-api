@@ -44,7 +44,6 @@ function getUsers() {
     if ($role === 'admin') {
         // Admin thấy tất cả
     } elseif ($role === 'owner') {
-        // Owner chỉ thấy employee và customer của chi nhánh mình
         $conditions[] = "(
             u.id IN (
                 SELECT ea.employee_id FROM employee_assignments ea 
@@ -59,7 +58,6 @@ function getUsers() {
         $params[] = $user_id;
         $params[] = $user_id;
     } elseif ($role === 'employee') {
-        // Employee chỉ thấy customer và employee do mình thêm
         $conditions[] = "(
             u.id IN (
                 SELECT bc.user_id FROM branch_customers bc 
@@ -72,7 +70,6 @@ function getUsers() {
         $params[] = $user_id;
         $params[] = $user_id;
     } elseif ($role === 'customer') {
-        // Customer chỉ thấy mình và người cùng phòng
         $conditions[] = "(
             u.id = ? OR u.id IN (
                 SELECT ro.user_id FROM room_occupants ro
@@ -87,7 +84,7 @@ function getUsers() {
     // Xây dựng truy vấn
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
-        SELECT u.id, u.username, u.name, u.email, u.role, u.created_at, u.phone, u.status
+        SELECT u.id, u.username, u.name, u.email, u.phone, u.role, u.created_at, u.status, u.bank_details, u.qr_code_url, u.dob
         FROM users u
         LEFT JOIN branch_customers bc ON u.id = bc.user_id
         LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
@@ -97,32 +94,34 @@ function getUsers() {
     ";
 
     try {
-        // Đếm tổng số bản ghi
         $countStmt = $pdo->prepare("SELECT COUNT(DISTINCT u.id) FROM users u LEFT JOIN branch_customers bc ON u.id = bc.user_id LEFT JOIN employee_assignments ea ON u.id = ea.employee_id $whereClause");
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
         $totalPages = ceil($totalRecords / $limit);
 
-        // Truy vấn dữ liệu
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($users as &$user) {
+            $user['bank_details'] = $user['bank_details'] ? json_decode($user['bank_details'], true) : null;
+        }
+
+        responseJson([
+            'status' => 'success',
+            'data' => $users,
+            'pagination' => [
+                'current_page' => $page,
+                'limit' => $limit,
+                'total_records' => $totalRecords,
+                'total_pages' => $totalPages
+            ]
+        ]);
     } catch (PDOException $e) {
         logError("Lỗi cơ sở dữ liệu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
         return;
     }
-
-    responseJson([
-        'status' => 'success',
-        'data' => $users,
-        'pagination' => [
-            'current_page' => $page,
-            'limit' => $limit,
-            'total_records' => $totalRecords,
-            'total_pages' => $totalPages
-        ]
-    ]);
 }
 
 function createUser() {
@@ -143,11 +142,10 @@ function createUser() {
         return;
     }
 
-    // Phân quyền
     $allowed = false;
     switch ($role) {
         case 'admin':
-            $allowed = true; // Admin được tạo mọi loại
+            $allowed = true;
             break;
         case 'owner':
             $allowed = in_array($input_role, ['customer', 'employee']);
@@ -167,14 +165,24 @@ function createUser() {
     try {
         checkUserExists($pdo, $userData['email'], $userData['username']);
         $stmt = $pdo->prepare("
-            INSERT INTO users (username, name, email, password, phone, role, status, provider, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, 'inactive', 'email', ?)
+            INSERT INTO users (username, name, email, password, phone, role, status, provider, created_by, bank_details, qr_code_url, dob)
+            VALUES (?, ?, ?, ?, ?, ?, 'inactive', 'email', ?, ?, ?, ?)
         ");
-        $stmt->execute([$userData['username'], $userData['name'], $userData['email'], $password, $userData['phone'], $input_role, $user_id]);
+        $stmt->execute([
+            $userData['username'],
+            $userData['name'],
+            $userData['email'],
+            $password,
+            $userData['phone'],
+            $input_role,
+            $user_id,
+            isset($userData['bank_details']) ? json_encode($userData['bank_details']) : null,
+            $userData['qr_code_url'] ?? null,
+            $userData['dob'] ?? null
+        ]);
 
         $newUserId = $pdo->lastInsertId();
 
-        // Nếu là owner hoặc employee, thêm vào branch_customers hoặc employee_assignments
         if ($input_role === 'customer' && ($role === 'owner' || $role === 'employee')) {
             $branch_id = ($role === 'owner') 
                 ? $pdo->query("SELECT id FROM branches WHERE owner_id = $user_id")->fetchColumn()
@@ -218,7 +226,6 @@ function updateUser() {
     $updates = [];
     $params = [];
 
-    // Validate và thêm các field
     if (isset($input['username']) && !empty(trim($input['username']))) {
         $updates[] = "username = ?";
         $params[] = $userData['username'];
@@ -241,6 +248,31 @@ function updateUser() {
     if (isset($input['phone'])) {
         $updates[] = "phone = ?";
         $params[] = $userData['phone'];
+    }
+
+    if (isset($input['bank_details'])) {
+        if (!is_array($input['bank_details']) || empty($input['bank_details'])) {
+            responseJson(['status' => 'error', 'message' => 'Bank details must be a non-empty array'], 400);
+            return;
+        }
+        foreach ($input['bank_details'] as $account) {
+            if (!isset($account['bank_name']) || !isset($account['account_number']) || !isset($account['account_holder'])) {
+                responseJson(['status' => 'error', 'message' => 'Each bank account must have bank_name, account_number, and account_holder'], 400);
+                return;
+            }
+        }
+        $updates[] = "bank_details = ?";
+        $params[] = json_encode($input['bank_details']);
+    }
+
+    if (isset($input['qr_code_url'])) {
+        $updates[] = "qr_code_url = ?";
+        $params[] = sanitizeInput($input['qr_code_url']);
+    }
+
+    if (isset($input['dob'])) {
+        $updates[] = "dob = ?";
+        $params[] = $input['dob'];
     }
 
     if (isset($input['role'])) {
@@ -275,7 +307,6 @@ function updateUser() {
         return;
     }
 
-    // Phân quyền
     if ($role !== 'admin') {
         if ($role === 'owner') {
             $stmt = $pdo->prepare("
@@ -334,19 +365,11 @@ function patchUser() {
     $role = $user['role'];
     $target_user_id = getResourceIdFromUri('#/users/([0-9]+)#');
 
-    // Chỉ cho phép chỉnh sửa chính mình, trừ admin, owner, employee
     if ($role !== 'admin' && $role !== 'owner' && $role !== 'employee' && $user_id != $target_user_id) {
         responseJson(['status' => 'error', 'message' => 'Không có quyền chỉnh sửa'], 403);
         return;
     }
 
-    $input = json_decode(file_get_contents('php://input'), true);
-    if (empty($input)) {
-        responseJson(['status' => 'error', 'message' => 'Không có dữ liệu được cung cấp'], 400);
-        return;
-    }
-
-    // Phân quyền
     if ($role === 'owner') {
         $stmt = $pdo->prepare("
             SELECT 1 FROM users u
@@ -376,6 +399,12 @@ function patchUser() {
 
     try {
         checkResourceExists($pdo, 'users', $target_user_id);
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (empty($input)) {
+            responseJson(['status' => 'error', 'message' => 'Không có dữ liệu được cung cấp'], 400);
+            return;
+        }
+
         $updates = [];
         $params = [];
 
@@ -403,6 +432,33 @@ function patchUser() {
             $updates[] = "phone = ?";
             $params[] = sanitizeInput($input['phone']);
         }
+        if (isset($input['bank_details'])) {
+            if (!is_array($input['bank_details']) || empty($input['bank_details'])) {
+                responseJson(['status' => 'error', 'message' => 'Bank details must be a non-empty array'], 400);
+                return;
+            }
+            foreach ($input['bank_details'] as $account) {
+                if (!isset($account['bank_name']) || !isset($account['account_number']) || !isset($account['account_holder'])) {
+                    responseJson(['status' => 'error', 'message' => 'Each bank account must have bank_name, account_number, and account_holder'], 400);
+                    return;
+                }
+            }
+            $updates[] = "bank_details = ?";
+            $params[] = json_encode($input['bank_details']);
+        }
+        if (isset($input['qr_code_url'])) {
+            $updates[] = "qr_code_url = ?";
+            $params[] = sanitizeInput($input['qr_code_url']);
+        }
+        if (isset($input['dob'])) {
+            $dob = DateTime::createFromFormat('Y-m-d', $input['dob']);
+            if (!$dob || $dob->format('Y-m-d') !== $input['dob']) {
+                responseJson(['status' => 'error', 'message' => 'Invalid date of birth format (YYYY-MM-DD)'], 400);
+                return;
+            }
+            $updates[] = "dob = ?";
+            $params[] = $input['dob'];
+        }
 
         if (empty($updates)) {
             responseJson(['status' => 'error', 'message' => 'Không có dữ liệu để cập nhật'], 400);
@@ -429,7 +485,6 @@ function deleteUser() {
     $role = $user['role'];
     $target_user_id = getResourceIdFromUri('#/users/([0-9]+)#');
 
-    // Phân quyền
     if ($role !== 'admin') {
         if ($role === 'owner') {
             $stmt = $pdo->prepare("
@@ -484,10 +539,19 @@ function registerUser() {
     try {
         checkUserExists($pdo, $userData['email'], $userData['username']);
         $stmt = $pdo->prepare("
-            INSERT INTO users (username, name, email, password, phone, role, status, provider)
-            VALUES (?, ?, ?, ?, ?, 'customer', 'inactive', 'email')
+            INSERT INTO users (username, name, email, password, phone, role, status, provider, bank_details, qr_code_url, dob)
+            VALUES (?, ?, ?, ?, ?, 'customer', 'inactive', 'email', ?, ?, ?)
         ");
-        $stmt->execute([$userData['username'], $userData['name'], $userData['email'], $password, $userData['phone']]);
+        $stmt->execute([
+            $userData['username'],
+            $userData['name'],
+            $userData['email'],
+            $password,
+            $userData['phone'],
+            isset($userData['bank_details']) ? json_encode($userData['bank_details']) : null,
+            $userData['qr_code_url'] ?? null,
+            $userData['dob'] ?? null
+        ]);
 
         $userId = $pdo->lastInsertId();
         $jwt = generateJWT($userId, 'customer');
@@ -544,6 +608,34 @@ function registerGoogleUser() {
     } catch (Exception $e) {
         logError("Lỗi đăng ký Google user: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
+    }
+}
+
+function getCurrentUser() {
+    $pdo = getDB();
+    $user = verifyJWT();
+    $user_id = $user['user_id'];
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id, username, name, email, phone, role, status, bank_details, qr_code_url, dob
+            FROM users
+            WHERE id = ? AND deleted_at IS NULL
+        ");
+        $stmt->execute([$user_id]);
+        $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$userData) {
+            responseJson(['status' => 'error', 'message' => 'Người dùng không tồn tại'], 404);
+            return;
+        }
+
+        $userData['bank_details'] = $userData['bank_details'] ? json_decode($userData['bank_details'], true) : null;
+
+        responseJson(['status' => 'success', 'data' => $userData]);
+    } catch (PDOException $e) {
+        logError("Lỗi lấy thông tin người dùng ID $user_id: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
 ?>

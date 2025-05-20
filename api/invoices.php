@@ -54,11 +54,14 @@ function getInvoices() {
 
     $query = "
         SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at,
-               c.room_id, r.name AS room_name, b.name AS branch_name
+               c.room_id, r.name AS room_name, b.name AS branch_name, p.payment_date,
+               u.phone AS owner_phone, u.qr_code_url, u.bank_details
         FROM invoices i
         JOIN contracts c ON i.contract_id = c.id
         JOIN rooms r ON c.room_id = r.id
         JOIN branches b ON i.branch_id = b.id
+        LEFT JOIN payments p ON i.contract_id = p.contract_id AND i.due_date = p.due_date
+        JOIN users u ON b.owner_id = u.id
         $where_clause
         ORDER BY i.created_at DESC
         LIMIT :limit OFFSET :offset
@@ -66,10 +69,12 @@ function getInvoices() {
 
     try {
         $count_query = "
-            SELECT COUNT(*) FROM invoices i
+            SELECT COUNT(*) 
+            FROM invoices i
             JOIN contracts c ON i.contract_id = c.id
             JOIN rooms r ON c.room_id = r.id
             JOIN branches b ON i.branch_id = b.id
+            JOIN users u ON b.owner_id = u.id
             $where_clause
         ";
         $count_stmt = $pdo->prepare($count_query);
@@ -88,6 +93,10 @@ function getInvoices() {
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
         $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($invoices as &$invoice) {
+            $invoice['bank_details'] = $invoice['bank_details'] ? json_decode($invoice['bank_details'], true) : null;
+        }
 
         responseJson([
             'status' => 'success',
@@ -142,11 +151,9 @@ function createInvoice() {
     }
 
     try {
-        // Kiểm tra contract_id và branch_id
         checkResourceExists($pdo, 'contracts', $contract_id);
         checkResourceExists($pdo, 'branches', $branch_id);
 
-        // Kiểm tra quyền truy cập chi nhánh
         $stmt = $pdo->prepare("
             SELECT 1 FROM branches b
             WHERE b.id = ? AND (b.owner_id = ? OR EXISTS (
@@ -161,7 +168,6 @@ function createInvoice() {
 
         $pdo->beginTransaction();
 
-        // Tạo hóa đơn
         $stmt = $pdo->prepare("
             INSERT INTO invoices (contract_id, branch_id, amount, due_date, status, created_at)
             VALUES (?, ?, ?, ?, ?, NOW())
@@ -169,7 +175,6 @@ function createInvoice() {
         $stmt->execute([$contract_id, $branch_id, $amount, $due_date, $status]);
         $invoice_id = $pdo->lastInsertId();
 
-        // Lấy thông tin phòng để gửi thông báo
         $stmt = $pdo->prepare("
             SELECT r.name AS room_name
             FROM contracts c
@@ -188,17 +193,22 @@ function createInvoice() {
             "Đã tạo hóa đơn (ID: $invoice_id, Tổng: $amount, Trạng thái: $status) cho phòng $room_name."
         );
 
+        $stmt = $pdo->prepare("
+            SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at,
+                   u.phone AS owner_phone, u.qr_code_url, u.bank_details
+            FROM invoices i
+            JOIN branches b ON i.branch_id = b.id
+            JOIN users u ON b.owner_id = u.id
+            WHERE i.id = ?
+        ");
+        $stmt->execute([$invoice_id]);
+        $invoice = $stmt->fetch(PDO::FETCH_ASSOC);
+        $invoice['bank_details'] = $invoice['bank_details'] ? json_decode($invoice['bank_details'], true) : null;
+
         responseJson([
             'status' => 'success',
             'message' => 'Tạo hóa đơn thành công',
-            'data' => [
-                'id' => $invoice_id,
-                'contract_id' => $contract_id,
-                'branch_id' => $branch_id,
-                'amount' => $amount,
-                'due_date' => $due_date,
-                'status' => $status
-            ]
+            'data' => $invoice
         ]);
     } catch (PDOException $e) {
         $pdo->rollBack();
@@ -222,11 +232,14 @@ function getInvoiceById($invoice_id) {
     try {
         $stmt = $pdo->prepare("
             SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at,
-                   c.room_id, r.name AS room_name, b.name AS branch_name
+                   c.room_id, r.name AS room_name, b.name AS branch_name, p.payment_date,
+                   u.phone AS owner_phone, u.qr_code_url, u.bank_details
             FROM invoices i
             JOIN contracts c ON i.contract_id = c.id
             JOIN rooms r ON c.room_id = r.id
             JOIN branches b ON i.branch_id = b.id
+            LEFT JOIN payments p ON i.contract_id = p.contract_id AND i.due_date = p.due_date
+            JOIN users u ON b.owner_id = u.id
             WHERE i.id = ? AND i.deleted_at IS NULL
         ");
         $stmt->execute([$invoice_id]);
@@ -260,6 +273,8 @@ function getInvoiceById($invoice_id) {
                 return;
             }
         }
+
+        $invoice['bank_details'] = $invoice['bank_details'] ? json_decode($invoice['bank_details'], true) : null;
 
         responseJson([
             'status' => 'success',
@@ -286,11 +301,13 @@ function getInvoiceDetails($invoice_id) {
     try {
         $stmt = $pdo->prepare("
             SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at,
-                   c.room_id, r.name AS room_name, b.name AS branch_name
+                   c.room_id, r.name AS room_name, b.name AS branch_name,
+                   u.phone AS owner_phone, u.qr_code_url, u.bank_details
             FROM invoices i
             JOIN contracts c ON i.contract_id = c.id
             JOIN rooms r ON c.room_id = r.id
             JOIN branches b ON i.branch_id = b.id
+            JOIN users u ON b.owner_id = u.id
             WHERE i.id = ? AND i.deleted_at IS NULL
         ");
         $stmt->execute([$invoice_id]);
@@ -325,7 +342,6 @@ function getInvoiceDetails($invoice_id) {
             }
         }
 
-        // Tính toán chi tiết từ utility_usage
         $month = date('Y-m', strtotime($invoice['due_date']));
         $stmt = $pdo->prepare("
             SELECT s.id AS service_id, s.name AS service_name, s.price, u.usage_amount, s.unit
@@ -339,7 +355,7 @@ function getInvoiceDetails($invoice_id) {
         $details = [
             [
                 'service_id' => null,
-                'amount' => (float)$invoice['amount'], // Giả sử amount bao gồm cả tiền phòng
+                'amount' => (float)$invoice['amount'],
                 'usage_amount' => null,
                 'description' => "Tiền phòng ({$invoice['room_name']})",
                 'service_name' => 'Room Price'
@@ -355,6 +371,8 @@ function getInvoiceDetails($invoice_id) {
                 'service_name' => $usage['service_name']
             ];
         }
+
+        $invoice['bank_details'] = $invoice['bank_details'] ? json_decode($invoice['bank_details'], true) : null;
 
         responseJson([
             'status' => 'success',
@@ -417,7 +435,6 @@ function createBulkInvoices() {
 
         $pdo->beginTransaction();
 
-        // Lấy danh sách hợp đồng hợp lệ có sử dụng điện trong kỳ
         $stmt = $pdo->prepare("
             SELECT c.id AS contract_id, c.room_id, r.price AS room_price, r.name AS room_name
             FROM contracts c
@@ -447,7 +464,6 @@ function createBulkInvoices() {
             $room_price = $contract['room_price'];
             $room_name = $contract['room_name'];
 
-            // Tính chi phí dịch vụ (bao gồm điện, nước, v.v.)
             $stmt = $pdo->prepare("
                 SELECT u.service_id, u.usage_amount, s.price, s.name AS service_name, s.unit
                 FROM utility_usage u
@@ -463,7 +479,6 @@ function createBulkInvoices() {
                 $total_amount += $service_amount;
             }
 
-            // Kiểm tra hóa đơn đã tồn tại
             $stmt = $pdo->prepare("
                 SELECT id FROM invoices
                 WHERE contract_id = ? AND DATE_FORMAT(due_date, '%Y-%m') = ? AND deleted_at IS NULL
@@ -472,7 +487,6 @@ function createBulkInvoices() {
             $existing_invoice = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($existing_invoice) {
-                // Cập nhật hóa đơn
                 $stmt = $pdo->prepare("
                     UPDATE invoices
                     SET amount = ?, due_date = ?, status = 'pending', created_at = NOW()
@@ -481,7 +495,6 @@ function createBulkInvoices() {
                 $stmt->execute([$total_amount, $due_date, $existing_invoice['id']]);
                 $invoice_id = $existing_invoice['id'];
             } else {
-                // Tạo hóa đơn mới
                 $stmt = $pdo->prepare("
                     INSERT INTO invoices (contract_id, branch_id, amount, due_date, status, created_at)
                     VALUES (?, ?, ?, ?, 'pending', NOW())
@@ -553,9 +566,7 @@ function updateInvoice($invoice_id) {
         return;
     }
 
-    if (!in_array($status, ['pending', 'paid', 'over
-
-due'])) {
+    if (!in_array($status, ['pending', 'paid', 'overdue'])) {
         responseJson(['status' => 'error', 'message' => 'Trạng thái không hợp lệ'], 400);
         return;
     }
@@ -596,6 +607,30 @@ due'])) {
         ");
         $stmt->execute([$amount, $due_date, $status, $invoice_id]);
 
+        if ($status === 'paid') {
+            $stmt = $pdo->prepare("
+                SELECT id FROM payments
+                WHERE contract_id = ? AND due_date = ?
+            ");
+            $stmt->execute([$invoice['contract_id'], $due_date]);
+            $payment = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($payment) {
+                $stmt = $pdo->prepare("
+                    UPDATE payments
+                    SET amount = ?, payment_date = CURDATE(), status = 'paid'
+                    WHERE id = ?
+                ");
+                $stmt->execute([$amount, $payment['id']]);
+            } else {
+                $stmt = $pdo->prepare("
+                    INSERT INTO payments (contract_id, amount, due_date, payment_date, status, created_at)
+                    VALUES (?, ?, ?, CURDATE(), 'paid', NOW())
+                ");
+                $stmt->execute([$invoice['contract_id'], $amount, $due_date]);
+            }
+        }
+
         $pdo->commit();
 
         createNotification(
@@ -604,17 +639,22 @@ due'])) {
             "Đã cập nhật hóa đơn (ID: $invoice_id, Tổng: $amount, Trạng thái: $status) cho phòng {$invoice['room_name']}."
         );
 
+        $stmt = $pdo->prepare("
+            SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at,
+                   u.phone AS owner_phone, u.qr_code_url, u.bank_details
+            FROM invoices i
+            JOIN branches b ON i.branch_id = b.id
+            JOIN users u ON b.owner_id = u.id
+            WHERE i.id = ?
+        ");
+        $stmt->execute([$invoice_id]);
+        $updated_invoice = $stmt->fetch(PDO::FETCH_ASSOC);
+        $updated_invoice['bank_details'] = $updated_invoice['bank_details'] ? json_decode($updated_invoice['bank_details'], true) : null;
+
         responseJson([
             'status' => 'success',
             'message' => 'Cập nhật hóa đơn thành công',
-            'data' => [
-                'id' => $invoice_id,
-                'contract_id' => $invoice['contract_id'],
-                'branch_id' => $invoice['branch_id'],
-                'amount' => $amount,
-                'due_date' => $due_date,
-                'status' => $status
-            ]
+            'data' => $updated_invoice
         ]);
     } catch (PDOException $e) {
         $pdo->rollBack();
@@ -713,14 +753,17 @@ function patchInvoice($invoice_id) {
             "Đã cập nhật một phần hóa đơn (ID: $invoice_id) cho phòng {$invoice['room_name']}."
         );
 
-        // Lấy hóa đơn sau khi cập nhật
         $stmt = $pdo->prepare("
-            SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at
+            SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at,
+                   u.phone AS owner_phone, u.qr_code_url, u.bank_details
             FROM invoices i
+            JOIN branches b ON i.branch_id = b.id
+            JOIN users u ON b.owner_id = u.id
             WHERE i.id = ?
         ");
         $stmt->execute([$invoice_id]);
         $updated_invoice = $stmt->fetch(PDO::FETCH_ASSOC);
+        $updated_invoice['bank_details'] = $updated_invoice['bank_details'] ? json_decode($updated_invoice['bank_details'], true) : null;
 
         responseJson([
             'status' => 'success',

@@ -68,6 +68,12 @@ function handleApiRequest($method, $uri)
             "handler" => "registerGoogleUser",
             "middleware" => "non-auth",
         ],
+        // QR code upload
+        "POST:upload-qr" => [
+            "file" => "../api/upload.php",
+            "handler" => "uploadQrCode",
+            "middleware" => "auth:admin,owner,employee",
+        ],
         // Branches
         "GET:branches" => [
             "file" => "../api/branches.php",
@@ -279,37 +285,37 @@ function handleApiRequest($method, $uri)
             "handler" => "createBulkUtilityUsage",
             "middleware" => "auth:owner,employee",
         ],
-        // Maintenance Requests
-        "GET:maintenance_requests" => [
-            "file" => "../api/maintenance_requests.php",
-            "handler" => "getMaintenanceRequests",
-            "middleware" => "auth:admin,owner,employee,customer",
-        ],
-        "POST:maintenance_requests" => [
-            "file" => "../api/maintenance_requests.php",
-            "handler" => "createMaintenanceRequest",
-            "middleware" => "auth:admin,owner,employee,customer",
-        ],
-        "GET:maintenance_requests/([0-9]+)" => [
-            "file" => "../api/maintenance_requests.php",
-            "handler" => "getMaintenanceRequestById",
-            "middleware" => "auth:admin,owner,employee,customer",
-        ],
-        "PUT:maintenance_requests/([0-9]+)" => [
-            "file" => "../api/maintenance_requests.php",
-            "handler" => "updateMaintenanceRequest",
-            "middleware" => "auth:owner,employee",
-        ],
-        "PATCH:maintenance_requests/([0-9]+)" => [
-            "file" => "../api/maintenance_requests.php",
-            "handler" => "patchMaintenanceRequest",
-            "middleware" => "auth:owner,employee",
-        ],
-        "DELETE:maintenance_requests/([0-9]+)" => [
-            "file" => "../api/maintenance_requests.php",
-            "handler" => "deleteMaintenanceRequest",
-            "middleware" => "auth:owner",
-        ],
+        // // Maintenance Requests
+        // "GET:maintenance_requests" => [
+        //     "file" => "../api/maintenance_requests.php",
+        //     "handler" => "getMaintenanceRequests",
+        //     "middleware" => "auth:admin,owner,employee,customer",
+        // ],
+        // "POST:maintenance_requests" => [
+        //     "file" => "../api/maintenance_requests.php",
+        //     "handler" => "createMaintenanceRequest",
+        //     "middleware" => "auth:admin,owner,employee,customer",
+        // ],
+        // "GET:maintenance_requests/([0-9]+)" => [
+        //     "file" => "../api/maintenance_requests.php",
+        //     "handler" => "getMaintenanceRequestById",
+        //     "middleware" => "auth:admin,owner,employee,customer",
+        // ],
+        // "PUT:maintenance_requests/([0-9]+)" => [
+        //     "file" => "../api/maintenance_requests.php",
+        //     "handler" => "updateMaintenanceRequest",
+        //     "middleware" => "auth:owner,employee",
+        // ],
+        // "PATCH:maintenance_requests/([0-9]+)" => [
+        //     "file" => "../api/maintenance_requests.php",
+        //     "handler" => "patchMaintenanceRequest",
+        //     "middleware" => "auth:owner,employee",
+        // ],
+        // "DELETE:maintenance_requests/([0-9]+)" => [
+        //     "file" => "../api/maintenance_requests.php",
+        //     "handler" => "deleteMaintenanceRequest",
+        //     "middleware" => "auth:owner",
+        // ],
         // Notifications
         "GET:notifications" => [
             "file" => "../api/notifications.php",
@@ -336,37 +342,37 @@ function handleApiRequest($method, $uri)
             "handler" => "deleteNotification",
             "middleware" => "auth:owner",
         ],
-        // Tickets
-        "GET:tickets" => [
-            "file" => "../api/tickets.php",
-            "handler" => "getTickets",
-            "middleware" => "auth:admin,owner,employee,customer",
-        ],
-        "POST:tickets" => [
-            "file" => "../api/tickets.php",
-            "handler" => "createTicket",
-            "middleware" => "auth:admin,owner,employee,customer",
-        ],
-        "GET:tickets/([0-9]+)" => [
-            "file" => "../api/tickets.php",
-            "handler" => "getTicketById",
-            "middleware" => "auth:admin,owner,employee,customer",
-        ],
-        "PUT:tickets/([0-9]+)" => [
-            "file" => "../api/tickets.php",
-            "handler" => "updateTicket",
-            "middleware" => "auth:owner,employee",
-        ],
-        "PATCH:tickets/([0-9]+)" => [
-            "file" => "../api/tickets.php",
-            "handler" => "patchTicket",
-            "middleware" => "auth:admin,owner,employee,customer",
-        ],
-        "DELETE:tickets/([0-9]+)" => [
-            "file" => "../api/tickets.php",
-            "handler" => "deleteTicket",
-            "middleware" => "auth:owner",
-        ],
+        // // Tickets
+        // "GET:tickets" => [
+        //     "file" => "../api/tickets.php",
+        //     "handler" => "getTickets",
+        //     "middleware" => "auth:admin,owner,employee,customer",
+        // ],
+        // "POST:tickets" => [
+        //     "file" => "../api/tickets.php",
+        //     "handler" => "createTicket",
+        //     "middleware" => "auth:admin,owner,employee,customer",
+        // ],
+        // "GET:tickets/([0-9]+)" => [
+        //     "file" => "../api/tickets.php",
+        //     "handler" => "getTicketById",
+        //     "middleware" => "auth:admin,owner,employee,customer",
+        // ],
+        // "PUT:tickets/([0-9]+)" => [
+        //     "file" => "../api/tickets.php",
+        //     "handler" => "updateTicket",
+        //     "middleware" => "auth:owner,employee",
+        // ],
+        // "PATCH:tickets/([0-9]+)" => [
+        //     "file" => "../api/tickets.php",
+        //     "handler" => "patchTicket",
+        //     "middleware" => "auth:admin,owner,employee,customer",
+        // ],
+        // "DELETE:tickets/([0-9]+)" => [
+        //     "file" => "../api/tickets.php",
+        //     "handler" => "deleteTicket",
+        //     "middleware" => "auth:owner",
+        // ],
         // Contracts
         "GET:contracts" => [
             "file" => "../api/contracts.php",
