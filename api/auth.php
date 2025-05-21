@@ -14,7 +14,7 @@ function login() {
 
     $pdo = getDB();
     try {
-        $stmt = $pdo->prepare("SELECT id, name, email, username, password, role, status FROM users WHERE username = ? AND provider = 'email'");
+        $stmt = $pdo->prepare("SELECT id, name, email, username, password, role, status, phone,bank_details,qr_code_url FROM users WHERE username = ? AND provider = 'email'");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
        
@@ -29,10 +29,11 @@ function login() {
         $token = $jwt['token'];
         $user['exp'] = $jwt['exp'] ?? null;
         unset($user['password']); // Bỏ mật khẩu ra khỏi kết quả
+        
         createNotification($pdo, $user['id'], "Chào mừng {$user['username']} đã đăng nhập!");
         responseJson(['status' => 'success', 'data' => ['token' => $token, 'user' => $user]]);
     } catch (Exception $e) {
-        logError('Lỗi đăng nhập: ' . $e->getMessage());
+        error_log('Lỗi đăng nhập: ' . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -49,7 +50,7 @@ function logout() {
         $stmt->execute([$token, $decoded['exp']]);
         responseJson(['status' => 'success', 'message' => 'Đăng xuất thành công']);
     } catch (Exception $e) {
-        logError('Lỗi đăng xuất: ' . $e->getMessage());
+        error_log('Lỗi đăng xuất: ' . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }

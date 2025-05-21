@@ -112,6 +112,8 @@ Hệ thống này là một giải pháp toàn diện để quản lý nhà tr�
   sudo chmod -R 775 /var/www/html/motel-rental-api/logs
   sudo chmod -R 775 /var/www/html/motel-rental-api/configs
   sudo chown -R www-data:www-data /var/www/html/motel-rental-api/cache
+  sudo chown -R www-data:www-data uploads/
+  sudo chmod -R 775 uploads/qr_codes
 - **Trình duyệt**: Chrome, Firefox, hoặc bất kỳ trình duyệt hiện đại nào.
 
 ---

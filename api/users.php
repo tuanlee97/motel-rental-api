@@ -84,7 +84,7 @@ function getUsers() {
     // Xây dựng truy vấn
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
-        SELECT u.id, u.username, u.name, u.email, u.phone, u.role, u.created_at, u.status, u.bank_details, u.qr_code_url, u.dob
+        SELECT u.id, u.username, u.name, u.email, u.phone, u.role, u.created_at, u.status, u.bank_details, u.qr_code_url
         FROM users u
         LEFT JOIN branch_customers bc ON u.id = bc.user_id
         LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
@@ -118,7 +118,7 @@ function getUsers() {
             ]
         ]);
     } catch (PDOException $e) {
-        logError("Lỗi cơ sở dữ liệu: " . $e->getMessage());
+        error_log("Lỗi cơ sở dữ liệu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
         return;
     }
@@ -170,10 +170,10 @@ function createUser() {
         ");
         $stmt->execute([
             $userData['username'],
-            $userData['name'],
+            $userData['name'] ?? null,
             $userData['email'],
             $password,
-            $userData['phone'],
+            $userData['phone'] ?? null,
             $input_role,
             $user_id,
             isset($userData['bank_details']) ? json_encode($userData['bank_details']) : null,
@@ -204,7 +204,7 @@ function createUser() {
         createNotification($pdo, $newUserId, "Chào mừng {$userData['username']} đã tham gia hệ thống!");
         responseJson(['status' => 'success', 'data' => ['user' => $userData]]);
     } catch (Exception $e) {
-        logError("Lỗi tạo người dùng: " . $e->getMessage());
+        error_log("Lỗi tạo người dùng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -213,8 +213,13 @@ function updateUser() {
     $pdo = getDB();
     $user = verifyJWT();
     $user_id = $user['user_id'];
-    $role = $user['role'];
     $target_user_id = getResourceIdFromUri('#/users/([0-9]+)#');
+
+    // Kiểm tra người dùng chỉ được cập nhật thông tin của chính mình
+    if ($user_id != $target_user_id) {
+        responseJson(['status' => 'error', 'message' => 'Bạn chỉ có thể cập nhật thông tin của chính mình'], 403);
+        return;
+    }
 
     $input = json_decode(file_get_contents('php://input'), true);
     if (empty($input)) {
@@ -226,6 +231,7 @@ function updateUser() {
     $updates = [];
     $params = [];
 
+    // Xử lý các trường người dùng được phép cập nhật
     if (isset($input['username']) && !empty(trim($input['username']))) {
         $updates[] = "username = ?";
         $params[] = $userData['username'];
@@ -271,18 +277,13 @@ function updateUser() {
     }
 
     if (isset($input['dob'])) {
-        $updates[] = "dob = ?";
-        $params[] = $input['dob'];
-    }
-
-    if (isset($input['role'])) {
-        $input_role = in_array($input['role'], ['employee', 'customer']) ? $input['role'] : null;
-        if (!$input_role) {
-            responseJson(['status' => 'error', 'message' => 'Vai trò không hợp lệ'], 400);
+        $dob = DateTime::createFromFormat('Y-m-d', $input['dob']);
+        if (!$dob || $dob->format('Y-m-d') !== $input['dob']) {
+            responseJson(['status' => 'error', 'message' => 'Invalid date of birth format (YYYY-MM-DD)'], 400);
             return;
         }
-        $updates[] = "role = ?";
-        $params[] = $input_role;
+        $updates[] = "dob = ?";
+        $params[] = $input['dob'];
     }
 
     if (isset($input['password']) && !empty(trim($input['password']))) {
@@ -294,49 +295,9 @@ function updateUser() {
         return;
     }
 
-    if (isset($input['status']) && in_array($input['status'], ['active', 'inactive', 'suspended'])) {
-        $updates[] = "status = ?";
-        $params[] = $input['status'];
-    } elseif (isset($input['status'])) {
-        responseJson(['status' => 'error', 'message' => 'Trạng thái không hợp lệ'], 400);
-        return;
-    }
-
     if (empty($updates)) {
         responseJson(['status' => 'error', 'message' => 'Không có trường nào để cập nhật'], 400);
         return;
-    }
-
-    if ($role !== 'admin') {
-        if ($role === 'owner') {
-            $stmt = $pdo->prepare("
-                SELECT 1 FROM users u
-                LEFT JOIN branch_customers bc ON u.id = bc.user_id
-                LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
-                JOIN branches b ON (bc.branch_id = b.id OR ea.branch_id = b.id)
-                WHERE u.id = ? AND b.owner_id = ?
-            ");
-            $stmt->execute([$target_user_id, $user_id]);
-            if (!$stmt->fetch()) {
-                responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật người dùng này'], 403);
-                return;
-            }
-        } elseif ($role === 'employee') {
-            $stmt = $pdo->prepare("
-                SELECT 1 FROM users u
-                LEFT JOIN branch_customers bc ON u.id = bc.user_id
-                LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
-                WHERE u.id = ? AND (bc.created_by = ? OR ea.created_by = ?)
-            ");
-            $stmt->execute([$target_user_id, $user_id, $user_id]);
-            if (!$stmt->fetch()) {
-                responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật người dùng này'], 403);
-                return;
-            }
-        } else {
-            responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật'], 403);
-            return;
-        }
     }
 
     try {
@@ -351,9 +312,9 @@ function updateUser() {
         $stmt->execute($params);
 
         createNotification($pdo, $target_user_id, "Thông tin tài khoản {$userData['username']} đã được cập nhật.");
-        responseJson(['status' => 'success', 'message' => 'Cập nhật người dùng thành công']);
+        responseJson(['status' => 'success', 'message' => 'Cập nhật thông tin thành công']);
     } catch (Exception $e) {
-        logError("Lỗi cập nhật người dùng ID $target_user_id: " . $e->getMessage());
+        error_log("Lỗi cập nhật người dùng ID $target_user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -362,48 +323,29 @@ function patchUser() {
     $pdo = getDB();
     $user = verifyJWT();
     $user_id = $user['user_id'];
-    $role = $user['role'];
     $target_user_id = getResourceIdFromUri('#/users/([0-9]+)#');
 
-    if ($role !== 'admin' && $role !== 'owner' && $role !== 'employee' && $user_id != $target_user_id) {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền chỉnh sửa'], 403);
+    if ($user_id != $target_user_id) {
+        responseJson(['status' => 'error', 'message' => 'Bạn chỉ có thể chỉnh sửa thông tin của chính mình'], 403);
         return;
-    }
-
-    if ($role === 'owner') {
-        $stmt = $pdo->prepare("
-            SELECT 1 FROM users u
-            LEFT JOIN branch_customers bc ON u.id = bc.user_id
-            LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
-            JOIN branches b ON (bc.branch_id = b.id OR ea.branch_id = b.id)
-            WHERE u.id = ? AND b.owner_id = ?
-        ");
-        $stmt->execute([$target_user_id, $user_id]);
-        if (!$stmt->fetch()) {
-            responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật người dùng này'], 403);
-            return;
-        }
-    } elseif ($role === 'employee') {
-        $stmt = $pdo->prepare("
-            SELECT 1 FROM users u
-            LEFT JOIN branch_customers bc ON u.id = bc.user_id
-            LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
-            WHERE u.id = ? AND (bc.created_by = ? OR ea.created_by = ?)
-        ");
-        $stmt->execute([$target_user_id, $user_id, $user_id]);
-        if (!$stmt->fetch()) {
-            responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật người dùng này'], 403);
-            return;
-        }
     }
 
     try {
         checkResourceExists($pdo, 'users', $target_user_id);
-        $input = json_decode(file_get_contents('php://input'), true);
+        $rawInput = file_get_contents('php://input');
+        error_log("Raw input: " . $rawInput);
+        $input = json_decode($rawInput, true);
+        if (empty($input) && json_last_error() !== JSON_ERROR_NONE) {
+            error_log("JSON decode error: " . json_last_error_msg());
+            responseJson(['status' => 'error', 'message' => 'Invalid JSON format'], 400);
+            return;
+        }
         if (empty($input)) {
+            error_log("Parsed input is empty");
             responseJson(['status' => 'error', 'message' => 'Không có dữ liệu được cung cấp'], 400);
             return;
         }
+        error_log("Parsed input: " . json_encode($input));
 
         $updates = [];
         $params = [];
@@ -471,13 +413,12 @@ function patchUser() {
         $stmt->execute($params);
 
         createNotification($pdo, $target_user_id, "Thông tin tài khoản đã được cập nhật.");
-        responseJson(['status' => 'success', 'message' => 'Cập nhật người dùng thành công']);
+        responseJson(['status' => 'success', 'message' => 'Cập nhật thông tin thành công']);
     } catch (Exception $e) {
-        logError("Lỗi patch người dùng ID $target_user_id: " . $e->getMessage());
+        error_log("Lỗi patch người dùng ID $target_user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
-
 function deleteUser() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -523,7 +464,7 @@ function deleteUser() {
         $stmt->execute([$target_user_id]);
         responseJson(['status' => 'success', 'message' => 'Xóa người dùng thành công']);
     } catch (Exception $e) {
-        logError("Lỗi xóa người dùng ID $target_user_id: " . $e->getMessage());
+        error_log("Lỗi xóa người dùng ID $target_user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -544,10 +485,10 @@ function registerUser() {
         ");
         $stmt->execute([
             $userData['username'],
-            $userData['name'],
+            $userData['name'] ?? null,
             $userData['email'],
             $password,
-            $userData['phone'],
+            $userData['phone'] ?? null,
             isset($userData['bank_details']) ? json_encode($userData['bank_details']) : null,
             $userData['qr_code_url'] ?? null,
             $userData['dob'] ?? null
@@ -558,7 +499,7 @@ function registerUser() {
         createNotification($pdo, $userId, "Chào mừng {$userData['username']} đã đăng ký!");
         responseJson(['status' => 'success', 'data' => ['user' => $userData]]);
     } catch (Exception $e) {
-        logError("Lỗi đăng ký người dùng: " . $e->getMessage());
+        error_log("Lỗi đăng ký người dùng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -606,7 +547,7 @@ function registerGoogleUser() {
         createNotification($pdo, $userId, "Chào mừng $username đã đăng ký qua Google!");
         responseJson(['status' => 'success', 'data' => ['token' => $token, 'user' => ['id' => $userId, 'username' => $username]]]);
     } catch (Exception $e) {
-        logError("Lỗi đăng ký Google user: " . $e->getMessage());
+        error_log("Lỗi đăng ký Google user: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -618,7 +559,7 @@ function getCurrentUser() {
 
     try {
         $stmt = $pdo->prepare("
-            SELECT id, username, name, email, phone, role, status, bank_details, qr_code_url, dob
+            SELECT id, username, name, email, phone, role, status, bank_details, qr_code_url
             FROM users
             WHERE id = ? AND deleted_at IS NULL
         ");
@@ -630,11 +571,11 @@ function getCurrentUser() {
             return;
         }
 
-        $userData['bank_details'] = $userData['bank_details'] ? json_decode($userData['bank_details'], true) : null;
+        //$userData['bank_details'] = $userData['bank_details'] ? json_decode($userData['bank_details'], true) : null;
 
         responseJson(['status' => 'success', 'data' => $userData]);
     } catch (PDOException $e) {
-        logError("Lỗi lấy thông tin người dùng ID $user_id: " . $e->getMessage());
+        error_log("Lỗi lấy thông tin người dùng ID $user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
