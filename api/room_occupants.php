@@ -4,6 +4,20 @@ require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/utils/common.php';
 
+function getActiveContractByRoomId(PDO $pdo, int $roomId) {
+    $stmt = $pdo->prepare("
+        SELECT id, start_date, end_date 
+        FROM contracts
+        WHERE room_id = ? 
+        AND status = 'active'
+        AND deleted_at IS NULL
+        ORDER BY start_date DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$roomId]);
+    $contract = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $contract ?: null;
+}
 // Thêm người ở cùng
 function createRoomOccupant() {
     $pdo = getDB();
@@ -22,7 +36,15 @@ function createRoomOccupant() {
     $occupants = $input['data'];
 
     try {
-        $stmt = $pdo->prepare("INSERT INTO room_occupants (room_id, user_id, relation) VALUES (:room_id, :user_id, :relation)");
+        // Lấy hợp đồng active hiện tại
+        $contract = getActiveContractByRoomId($pdo, $roomId);
+
+        if (!$contract) {
+            responseJson(['status' => 'error', 'message' => 'Không tìm thấy hợp đồng cho phòng này'], 400);
+            return;
+        }
+
+        $stmt = $pdo->prepare("INSERT INTO room_occupants (room_id, user_id, relation, start_date, end_date) VALUES (:room_id, :user_id, :relation, :start_date, :end_date)");
 
         foreach ($occupants as $occ) {
             if (!isset($occ['user_id'])) {
@@ -32,17 +54,19 @@ function createRoomOccupant() {
             $stmt->execute([
                 ':room_id' => $roomId,
                 ':user_id' => $occ['user_id'],
-                ':relation' => $occ['relation'] ?? null
+                ':relation' => $occ['relation'] ?? null,
+                ':start_date' => $contract['start_date'],
+                ':end_date' => $contract['end_date']
             ]);
         }
 
-        responseJson(['message' => 'Thêm người ở cùng thành công']);
+        responseJson(['status'=>'success', 'message' => 'Thêm người ở cùng thành công']);
     } catch (PDOException $e) {
         error_log("DB Error: " . $e->getMessage());
-        responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     } catch (Exception $e) {
         error_log("Unhandled Error: " . $e->getMessage());
-        responseJson(['message' => 'Lỗi không xác định'], 500);
+        responseJson(['status' => 'error', 'message' => 'Lỗi không xác định'], 500);
     }
 }
 // Lấy danh sách occupants theo room_id
@@ -157,6 +181,16 @@ function updateRoomOccupants() {
     $newOccupants = $input['data'];
 
     try {
+
+        // Lấy hợp đồng active hiện tại
+        $contract = getActiveContractByRoomId($pdo, $roomId);
+
+        if (!$contract) {
+            responseJson(['status' => 'error', 'message' => 'Không tìm thấy hợp đồng cho phòng này'], 400);
+            return;
+        }
+
+
         // Bắt đầu transaction để đảm bảo tính toàn vẹn dữ liệu
         $pdo->beginTransaction();
 
@@ -181,7 +215,7 @@ function updateRoomOccupants() {
         }
 
         // 2. Thêm hoặc cập nhật occupants
-        $insertStmt = $pdo->prepare("INSERT INTO room_occupants (room_id, user_id, relation) VALUES (:room_id, :user_id, :relation)");
+        $insertStmt = $pdo->prepare("INSERT INTO room_occupants (room_id, user_id, relation, start_date, end_date) VALUES (:room_id, :user_id, :relation, :start_date, :end_date)");
         $updateStmt = $pdo->prepare("UPDATE room_occupants SET relation = :relation WHERE room_id = :room_id AND user_id = :user_id AND deleted_at IS NULL");
 
         foreach ($newOccupants as $occ) {
@@ -191,7 +225,8 @@ function updateRoomOccupants() {
 
             $userId = $occ['user_id'];
             $relation = $occ['relation'] ?? null;
-
+            $startDate = $contract['start_date'];
+            $endDate = $contract['end_date'];
             // Kiểm tra xem occupant đã tồn tại chưa
             if (in_array($userId, $currentUserIds)) {
                 // Cập nhật relation nếu cần
@@ -208,7 +243,9 @@ function updateRoomOccupants() {
                 $insertStmt->execute([
                     ':room_id' => $roomId,
                     ':user_id' => $userId,
-                    ':relation' => $relation
+                    ':relation' => $relation,
+                    ':start_date' => $startDate,
+                    ':end_date' => $endDate
                 ]);
             }
         }
@@ -217,11 +254,15 @@ function updateRoomOccupants() {
         $pdo->commit();
         responseJson(['status' => 'success', 'message' => 'Cập nhật danh sách người ở cùng thành công']);
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi cập nhật danh sách occupants cho phòng ID $roomId: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi không xác định: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi không xác định'], 500);
     }

@@ -58,6 +58,7 @@ function getContracts() {
         $params[] = $search;
         $params[] = $search;
     }
+     $conditions[] = "c.deleted_at IS NULL";
 
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
@@ -369,12 +370,36 @@ function deleteContract() {
         responseJson(['status' => 'success', 'message' => 'Xóa hợp đồng thành công']);
     } catch (PDOException $e) {
         // Quay lại giao dịch trong trường hợp lỗi
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi xóa hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
 
+// Xóa hợp đồng và các liên kết liên quan bằng cách cập nhật trường deleted_at
+function deleteContractById($contract) {
+    $pdo = getDB();
+    $contract_id = $contract['id'];
+    $room_id = $contract['room_id'];
+    try {
+        // Xóa mềm hợp đồng
+        $stmt = $pdo->prepare("UPDATE contracts SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$contract_id]);
+
+        // Xóa mềm người thuê (room_occupants)
+        $stmt = $pdo->prepare("UPDATE utility_usage SET deleted_at = NOW() WHERE room_id = ? AND contract_id = ? AND deleted_at IS NULL");
+        $stmt->execute([$room_id, $contract_id]);
+
+        // Xóa mềm các tiện ích sử dụng (utility_usage)
+        $stmt = $pdo->prepare("UPDATE utility_usage SET deleted_at = NOW() WHERE contract_id = ?");
+        $stmt->execute([$contract_id]);
+
+    } catch (PDOException $e) {
+        error_log("Lỗi xóa hợp đồng ID $contract_id: " . $e->getMessage());
+    }
+}
 
 // Kết thúc hợp đồng
 function endContract() {
@@ -383,20 +408,23 @@ function endContract() {
     $user_id = $user['user_id'];
     $role = $user['role'];
 
-    // Kiểm tra quyền của người dùng
     if (!in_array($role, ['admin', 'owner', 'employee'])) {
         responseJson(['status' => 'error', 'message' => 'Không có quyền kết thúc hợp đồng'], 403);
         return;
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
-
     validateRequiredFields($input, ['id']);
     $contract_id = (int)$input['id'];
-
+    
     try {
         // Lấy thông tin hợp đồng
-        $stmt = $pdo->prepare("SELECT room_id, user_id, status FROM contracts WHERE id = ? AND deleted_at IS NULL");
+        $stmt = $pdo->prepare("
+            SELECT c.room_id, c.user_id, c.status, c.start_date, c.end_date, c.deposit, c.branch_id, r.price
+            FROM contracts c
+            JOIN rooms r ON c.room_id = r.id
+            WHERE c.id = ? AND c.deleted_at IS NULL
+        ");
         $stmt->execute([$contract_id]);
         $contract = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -404,11 +432,19 @@ function endContract() {
             responseJson(['status' => 'error', 'message' => 'Hợp đồng không tồn tại hoặc đã bị xóa'], 404);
             return;
         }
-
+        if ($contract['status'] !== 'active') {
+            deleteContract($contract);
+            responseJson(['status' => 'success', 'message' => 'Đã xóa hợp đồng']);
+            return;
+        }
         $room_id = $contract['room_id'];
         $tenant_id = $contract['user_id'];
+        $branch_id = $contract['branch_id'];
+        $deposit = $contract['deposit'];
+        $room_price = $contract['price'];
+        $start_date = $contract['start_date'];
 
-        // Kiểm tra quyền của owner/employee
+        // Kiểm tra quyền owner/employee
         if ($role === 'owner' || $role === 'employee') {
             $stmt = $pdo->prepare("
                 SELECT 1 FROM contracts c
@@ -424,28 +460,98 @@ function endContract() {
             }
         }
 
+        // Xác định tháng hiện tại và tỷ lệ sử dụng
+        $current_date = new DateTime();
+        $current_month = $current_date->format('Y-m');
+        $start_date_obj = new DateTime($start_date);
+        $days_in_month = (int)$current_date->format('t');
+
+        // Tính số ngày sử dụng thực tế, tối thiểu là 1 ngày
+        $usage_days = 0;
+        if ($start_date_obj->format('Y-m') === $current_month) {
+            // Nếu hợp đồng bắt đầu trong tháng hiện tại
+            $interval = $start_date_obj->diff($current_date);
+            $usage_days = max(1, $interval->days + 1); // Tối thiểu 1 ngày, +1 để tính cả ngày hiện tại
+        } else {
+            // Nếu hợp đồng bắt đầu trước tháng hiện tại
+            $usage_days = (int)$current_date->format('j'); // Số ngày từ đầu tháng đến hiện tại
+        }
+        $usage_ratio = $usage_days / $days_in_month;
+
+        // Kiểm tra utility_usage cho hợp đồng hiện tại
+        $stmt = $pdo->prepare("
+            SELECT u.id, u.usage_amount, u.month, s.price
+            FROM utility_usage u
+            JOIN services s ON u.service_id = s.id
+            WHERE u.room_id = ? 
+            AND u.month = ? 
+            AND u.contract_id = ? 
+            AND u.recorded_at >= ? 
+            AND u.recorded_at <= NOW()
+            AND u.deleted_at IS NULL
+        ");
+        $stmt->execute([$room_id, $current_month, $contract_id, $start_date]);
+        $utility_usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($utility_usages)) {
+            responseJson([
+                'status' => 'error',
+                'message' => "Chưa có dữ liệu utility_usage cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
+            ], 400);
+            return;
+        }
+
         $pdo->beginTransaction();
 
-        // 1. Cập nhật hợp đồng thành 'ended' và xóa mềm
-        $stmt = $pdo->prepare("UPDATE contracts SET status = 'ended', end_date = NOW(), deleted_at = NOW() WHERE id = ?");
+        // 1. Cập nhật trạng thái hợp đồng
+        $stmt = $pdo->prepare("UPDATE contracts SET status = 'ended', end_date = NOW() WHERE id = ?");
         $stmt->execute([$contract_id]);
 
-        // 2. Cập nhật phòng thành available và xóa mềm
-        $stmt = $pdo->prepare("UPDATE rooms SET status = 'available', deleted_at = NOW() WHERE id = ?");
+        // 2. Cập nhật trạng thái phòng
+        $stmt = $pdo->prepare("UPDATE rooms SET status = 'available' WHERE id = ?");
         $stmt->execute([$room_id]);
 
-        // 3. Xóa người ở cùng (nếu có) - xóa mềm
-        $stmt = $pdo->prepare("UPDATE room_occupants SET deleted_at = NOW() WHERE room_id = ?");
-        $stmt->execute([$room_id]);
+        // 3. Tạo hóa đơn
+        $amount_due = 0;
+        foreach ($utility_usages as $usage) {
+            $amount_due += $usage['usage_amount'] * $usage['price'];
+        }
+        $amount_due += round($room_price * $usage_ratio);
+        $amount_due = round($amount_due);
+        $today = date('Y-m-d');
+    
+        $stmt = $pdo->prepare("
+            INSERT INTO invoices (contract_id, branch_id, amount, due_date, status, created_at)
+            VALUES (?, ?, ?, ?, 'pending', NOW())
+        ");
+        $stmt->execute([$contract_id, $branch_id, $amount_due, $today]);
+        $invoice_id = $pdo->lastInsertId();
+
+        // 6. Tạo bản ghi thanh toán
+        $stmt = $pdo->prepare("
+            INSERT INTO payments (contract_id, amount, due_date, status, created_at)
+            VALUES (?, ?, ?, 'pending', NOW())
+        ");
+        $stmt->execute([$contract_id, $amount_due, $today]);
+
+        // 7. Gửi thông báo
+        if ($deposit > 0) {
+            createNotification($pdo, $tenant_id, "Tiền đặt cọc $deposit cho hợp đồng ID $contract_id đã được hoàn.");
+        }
+        $notification_message = "Hợp đồng ID $contract_id đã được kết thúc. Hóa đơn ID $invoice_id đã được tạo cho $current_day/$days_in_month ngày sử dụng trong tháng $current_month.";
+        createNotification($pdo, $tenant_id, $notification_message);
 
         $pdo->commit();
 
-        // 4. Gửi thông báo cho khách hàng
-        createNotification($pdo, $tenant_id, "Hợp đồng ID $contract_id đã được kết thúc. Cảm ơn bạn đã sử dụng dịch vụ!");
-
-        responseJson(['status' => 'success', 'message' => 'Trả phòng thành công']);
+        responseJson([
+            'status' => 'success',
+            'message' => 'Kết thúc hợp đồng thành công',
+            'data' => ['invoice_id' => $invoice_id]
+        ]);
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi kết thúc hợp đồng (contract ID $contract_id): " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }

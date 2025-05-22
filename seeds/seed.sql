@@ -19,7 +19,7 @@ DELETE FROM users;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- Thêm dữ liệu vào bảng users --password: 123456
+-- Thêm dữ liệu vào bảng users -- password: 123456
 INSERT INTO users 
 (username, name, email, password, phone, role, status, provider, created_by) 
 VALUES 
@@ -67,7 +67,8 @@ INSERT INTO rooms (branch_id, type_id, name, price, status) VALUES
 -- Thêm dữ liệu vào bảng contracts
 INSERT INTO contracts (room_id, user_id, start_date, end_date, status, created_by, branch_id, deposit) VALUES
 (1, 8, '2025-01-01', '2025-12-31', 'active', 4, 1, 2000000),
-(4, 11, '2025-02-01', '2025-12-31', 'active', 6, 2, 2500000);
+(4, 11, '2025-02-01', '2025-12-31', 'active', 6, 2, 2500000),
+(1, 10, '2024-11-01', '2024-12-31', 'ended', 4, 1, 2000000); -- Hợp đồng cũ cho khách cũ
 
 -- Thêm dữ liệu vào bảng payments
 INSERT INTO payments (contract_id, amount, due_date, payment_date, status) VALUES
@@ -90,11 +91,17 @@ INSERT INTO services (branch_id, name, price, unit, type) VALUES
 (2, 'Internet', 150000, 'tháng', 'other');
 
 -- Thêm dữ liệu vào bảng utility_usage
-INSERT INTO utility_usage (room_id, service_id, month, usage_amount, old_reading, new_reading, recorded_at) VALUES
-(1, 1, '2025-01', 100, 0, 100, '2025-01-31 10:00:00'),
-(1, 2, '2025-01', 5, 0, 5, '2025-01-31 10:00:00'),
-(4, 3, '2025-02', 120, 0, 120, '2025-02-28 10:00:00'),
-(4, 4, '2025-02', 6, 0, 6 , '2025-02-28 10:00:00');
+INSERT INTO utility_usage (room_id, contract_id, service_id, month, usage_amount, old_reading, new_reading, recorded_at) VALUES
+-- Phòng 101 (hợp đồng cũ, khách cũ, ID=3)
+(1, 3, 1, '2024-12', 80, 0, 80, '2024-12-31 10:00:00'), -- Điện, trước start_date của hợp đồng 1
+(1, 3, 2, '2024-12', 4, 0, 4, '2024-12-31 10:00:00'), -- Nước, trước start_date của hợp đồng 1
+-- Phòng 101 (hợp đồng hiện tại, ID=1)
+(1, 1, 1, '2025-01', 100, 80, 180, '2025-01-31 10:00:00'), -- Điện
+(1, 1, 2, '2025-01', 5, 4, 9, '2025-01-31 10:00:00'), -- Nước
+-- Phòng A1 (hợp đồng ID=2)
+(4, 2, 3, '2025-02', 120, 0, 120, '2025-02-28 10:00:00'), -- Điện
+(4, 2, 4, '2025-02', 6, 0, 6, '2025-02-28 10:00:00'), -- Nước
+(4, 2, 5, '2025-02', 1, 0, 1, '2025-02-28 10:00:00'); -- Internet
 
 -- Thêm dữ liệu vào bảng maintenance_requests
 INSERT INTO maintenance_requests (room_id, description, status, created_at, created_by) VALUES
@@ -114,11 +121,11 @@ INSERT INTO tickets (user_id, subject, message, status, created_at) VALUES
 (11, 'Yêu cầu hỗ trợ', 'Cần hỗ trợ về hợp đồng thuê.', 'pending', '2025-02-03 11:00:00');
 
 -- Thêm dữ liệu vào bảng room_occupants
-INSERT INTO room_occupants (room_id, user_id, relation, created_at) VALUES
-(1, 8, 'Chủ hợp đồng', '2025-01-01 09:00:00'),
-(1, 9, 'Người thân', '2025-01-01 09:00:00'),
-(4, 11, 'Chủ hợp đồng', '2025-02-01 09:00:00'),
-(4, 12, 'Bạn cùng phòng', '2025-02-01 09:00:00');
+INSERT INTO room_occupants (room_id, user_id, relation, created_at, start_date, end_date) VALUES
+(1, 8, 'Chủ hợp đồng', '2025-01-01 09:00:00', '2025-01-01', '2025-12-31'),
+(1, 9, 'Người thân', '2025-01-01 09:00:00', '2025-01-01', '2025-12-31'),
+(4, 11, 'Chủ hợp đồng', '2025-02-01 09:00:00', '2025-02-01', '2025-12-31'),
+(4, 12, 'Bạn cùng phòng', '2025-02-01 09:00:00', '2025-02-01', '2025-12-31');
 
 -- Thêm dữ liệu vào bảng employee_assignments
 INSERT INTO employee_assignments (employee_id, branch_id, created_at, created_by) VALUES

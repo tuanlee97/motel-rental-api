@@ -136,7 +136,11 @@ function handleApiRequest($method, $uri)
             "handler" => "deleteRoom",
             "middleware" => "auth:owner",
         ],
-
+        "POST:rooms/change" => [
+            "file" => "../api/rooms.php",
+            "handler" => "changeRoom",
+            "middleware" => "auth:admin,owner,employee",
+        ],
         // Room Occupants
         "GET:room_occupants" => [
             "file" => "../api/room_occupants.php",

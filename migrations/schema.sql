@@ -130,17 +130,19 @@ CREATE TABLE IF NOT EXISTS services (
 CREATE TABLE IF NOT EXISTS utility_usage (
     id INT AUTO_INCREMENT PRIMARY KEY,
     room_id INT NOT NULL,
+    contract_id INT NOT NULL,
     service_id INT NOT NULL,
     month VARCHAR(7) NOT NULL,
     usage_amount DECIMAL(10,2) NOT NULL,
     old_reading DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     new_reading DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
+    deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+    FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
     FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_room_service_month (room_id, service_id, month),
-    INDEX idx_utility_usage_room_month (room_id, month)
+    UNIQUE KEY unique_room_contract_service_month (room_id, contract_id, service_id, month),
+    INDEX idx_utility_usage_room_contract_month (room_id, contract_id, month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Bảng maintenance_requests: Lưu yêu cầu bảo trì

@@ -127,18 +127,12 @@ function createInvoice() {
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
-    validateRequiredFields($input, ['contract_id', 'branch_id', 'amount', 'due_date', 'status']);
+    validateRequiredFields($input, ['contract_id', 'branch_id', 'due_date', 'status']);
     $data = sanitizeInput($input);
     $contract_id = (int)$data['contract_id'];
     $branch_id = (int)$data['branch_id'];
-    $amount = (float)$data['amount'];
     $due_date = $data['due_date'];
     $status = $data['status'];
-
-    if ($amount < 0) {
-        responseJson(['status' => 'error', 'message' => 'Tổng tiền không được âm'], 400);
-        return;
-    }
 
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $due_date)) {
         responseJson(['status' => 'error', 'message' => 'Định dạng ngày đến hạn không hợp lệ (YYYY-MM-DD)'], 400);
@@ -151,9 +145,28 @@ function createInvoice() {
     }
 
     try {
+        // Kiểm tra hợp đồng và chi nhánh
         checkResourceExists($pdo, 'contracts', $contract_id);
         checkResourceExists($pdo, 'branches', $branch_id);
 
+        $stmt = $pdo->prepare("
+            SELECT c.room_id, c.start_date, r.price
+            FROM contracts c
+            JOIN rooms r ON c.room_id = r.id
+            WHERE c.id = ? AND c.deleted_at IS NULL
+        ");
+        $stmt->execute([$contract_id]);
+        $contract = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$contract) {
+            responseJson(['status' => 'error', 'message' => 'Hợp đồng không tồn tại'], 404);
+            return;
+        }
+
+        $room_id = $contract['room_id'];
+        $room_price = $contract['price'];
+        $start_date = $contract['start_date'];
+
+        // Kiểm tra quyền owner/employee
         $stmt = $pdo->prepare("
             SELECT 1 FROM branches b
             WHERE b.id = ? AND (b.owner_id = ? OR EXISTS (
@@ -166,15 +179,62 @@ function createInvoice() {
             return;
         }
 
+        // Xác định tháng hiện tại và tỷ lệ sử dụng
+        $current_date = new DateTime($due_date);
+        $current_month = $current_date->format('Y-m');
+        $start_date_obj = new DateTime($start_date);
+        $days_in_month = (int)$current_date->format('t');
+        $usage_days = 0;
+
+        if ($start_date_obj->format('Y-m') === $current_month) {
+            $interval = $start_date_obj->diff($current_date);
+            $usage_days = max(1, $interval->days + 1); // Tối thiểu 1 ngày
+        } else {
+            $usage_days = (int)$current_date->format('j');
+        }
+        $usage_ratio = $usage_days / $days_in_month;
+
+        // Kiểm tra utility_usage
+        $stmt = $pdo->prepare("
+            SELECT u.id, u.usage_amount, u.month, s.price
+            FROM utility_usage u
+            JOIN services s ON u.service_id = s.id
+            WHERE u.room_id = ? 
+            AND u.month = ? 
+            AND u.contract_id = ? 
+            AND u.recorded_at >= ? 
+            AND u.recorded_at <= ?
+            AND u.deleted_at IS NULL
+        ");
+        $stmt->execute([$room_id, $current_month, $contract_id, $start_date, $due_date]);
+        $utility_usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($utility_usages)) {
+            responseJson([
+                'status' => 'error',
+                'message' => "Chưa có dữ liệu utility_usage cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
+            ], 400);
+            return;
+        }
+
         $pdo->beginTransaction();
 
+        // Tính tổng chi phí
+        $amount_due = round($room_price * $usage_ratio);
+        foreach ($utility_usages as $usage) {
+            $amount_due += $usage['usage_amount'] * $usage['price'];
+        }
+        $amount_due = round($amount_due);
+
+        // Tạo hóa đơn
         $stmt = $pdo->prepare("
             INSERT INTO invoices (contract_id, branch_id, amount, due_date, status, created_at)
             VALUES (?, ?, ?, ?, ?, NOW())
         ");
-        $stmt->execute([$contract_id, $branch_id, $amount, $due_date, $status]);
+        $stmt->execute([$contract_id, $branch_id, $amount_due, $due_date, $status]);
         $invoice_id = $pdo->lastInsertId();
 
+        // Lấy thông tin phòng
         $stmt = $pdo->prepare("
             SELECT r.name AS room_name
             FROM contracts c
@@ -190,7 +250,7 @@ function createInvoice() {
         createNotification(
             $pdo,
             $user_id,
-            "Đã tạo hóa đơn (ID: $invoice_id, Tổng: $amount, Trạng thái: $status) cho phòng $room_name."
+            "Đã tạo hóa đơn (ID: $invoice_id, Tổng: $amount_due, Trạng thái: $status) cho phòng $room_name."
         );
 
         $stmt = $pdo->prepare("
@@ -211,7 +271,9 @@ function createInvoice() {
             'data' => $invoice
         ]);
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi tạo hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
@@ -435,13 +497,14 @@ function createBulkInvoices() {
 
         $pdo->beginTransaction();
 
+        // Lấy danh sách hợp đồng
         $stmt = $pdo->prepare("
-            SELECT c.id AS contract_id, c.room_id, r.price AS room_price, r.name AS room_name
+            SELECT c.id AS contract_id, c.room_id, c.start_date, r.price AS room_price, r.name AS room_name
             FROM contracts c
             JOIN rooms r ON c.room_id = r.id
             WHERE r.branch_id = ? 
             AND r.status = 'occupied'
-            AND ? BETWEEN DATE_FORMAT(c.start_date, '%Y-%m') AND DATE_FORMAT(c.end_date, '%Y-%m')
+            AND ? BETWEEN DATE_FORMAT(c.start_date, '%Y-%m') AND IFNULL(DATE_FORMAT(c.end_date, '%Y-%m'), '9999-12')
             AND c.status IN ('active', 'ended', 'cancelled')
             AND c.deleted_at IS NULL
             AND EXISTS (
@@ -450,35 +513,61 @@ function createBulkInvoices() {
                 JOIN services s ON u.service_id = s.id
                 WHERE u.room_id = c.room_id 
                 AND u.month = ? 
+                AND u.contract_id = c.id
+                AND u.recorded_at >= c.start_date
+                AND u.recorded_at <= ?
                 AND u.deleted_at IS NULL
-                AND s.type = 'electricity'
             )
         ");
-        $stmt->execute([$branch_id, $month, $month]);
+        $stmt->execute([$branch_id, $month, $month, $due_date]);
         $contracts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $created = [];
+        $current_date = new DateTime($due_date);
+        $current_month = $current_date->format('Y-m');
+        $days_in_month = (int)$current_date->format('t');
+
         foreach ($contracts as $contract) {
             $contract_id = $contract['contract_id'];
             $room_id = $contract['room_id'];
             $room_price = $contract['room_price'];
             $room_name = $contract['room_name'];
+            $start_date = $contract['start_date'];
 
+            // Tính tỷ lệ sử dụng
+            $start_date_obj = new DateTime($start_date);
+            $usage_days = 0;
+            if ($start_date_obj->format('Y-m') === $current_month) {
+                $interval = $start_date_obj->diff($current_date);
+                $usage_days = max(1, $interval->days + 1);
+            } else {
+                $usage_days = (int)$current_date->format('j');
+            }
+            $usage_ratio = $usage_days / $days_in_month;
+
+            // Lấy dữ liệu utility_usage
             $stmt = $pdo->prepare("
                 SELECT u.service_id, u.usage_amount, s.price, s.name AS service_name, s.unit
                 FROM utility_usage u
                 JOIN services s ON u.service_id = s.id
-                WHERE u.room_id = ? AND u.month = ? AND u.deleted_at IS NULL
+                WHERE u.room_id = ? AND u.month = ? AND u.contract_id = ? AND u.deleted_at IS NULL
             ");
-            $stmt->execute([$room_id, $month]);
+            $stmt->execute([$room_id, $month, $contract_id]);
             $usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $total_amount = $room_price;
+            if (empty($usages)) {
+                continue; // Bỏ qua nếu không có dữ liệu utility_usage
+            }
+
+            // Tính tổng chi phí
+            $total_amount = round($room_price * $usage_ratio);
             foreach ($usages as $usage) {
                 $service_amount = $usage['usage_amount'] * $usage['price'];
                 $total_amount += $service_amount;
             }
+            $total_amount = round($total_amount);
 
+            // Kiểm tra hóa đơn hiện có
             $stmt = $pdo->prepare("
                 SELECT id FROM invoices
                 WHERE contract_id = ? AND DATE_FORMAT(due_date, '%Y-%m') = ? AND deleted_at IS NULL
@@ -531,7 +620,9 @@ function createBulkInvoices() {
             ]
         ]);
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi tạo hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
@@ -550,16 +641,10 @@ function updateInvoice($invoice_id) {
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
-    validateRequiredFields($input, ['amount', 'due_date', 'status']);
+    validateRequiredFields($input, ['due_date', 'status']);
     $data = sanitizeInput($input);
-    $amount = (float)$data['amount'];
     $due_date = $data['due_date'];
     $status = $data['status'];
-
-    if ($amount < 0) {
-        responseJson(['status' => 'error', 'message' => 'Tổng tiền không được âm'], 400);
-        return;
-    }
 
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $due_date)) {
         responseJson(['status' => 'error', 'message' => 'Định dạng ngày đến hạn không hợp lệ (YYYY-MM-DD)'], 400);
@@ -572,8 +657,9 @@ function updateInvoice($invoice_id) {
     }
 
     try {
+        // Kiểm tra hóa đơn
         $stmt = $pdo->prepare("
-            SELECT i.branch_id, i.contract_id, c.room_id, r.name AS room_name
+            SELECT i.branch_id, i.contract_id, c.room_id, c.start_date, r.name AS room_name, r.price
             FROM invoices i
             JOIN contracts c ON i.contract_id = c.id
             JOIN rooms r ON c.room_id = r.id
@@ -586,6 +672,13 @@ function updateInvoice($invoice_id) {
             return;
         }
 
+        $contract_id = $invoice['contract_id'];
+        $room_id = $invoice['room_id'];
+        $room_price = $invoice['price'];
+        $start_date = $invoice['start_date'];
+        $room_name = $invoice['room_name'];
+
+        // Kiểm tra quyền owner/employee
         $stmt = $pdo->prepare("
             SELECT 1 FROM branches b
             WHERE b.id = ? AND (b.owner_id = ? OR EXISTS (
@@ -598,21 +691,68 @@ function updateInvoice($invoice_id) {
             return;
         }
 
+        // Tính lại amount
+        $current_date = new DateTime($due_date);
+        $current_month = $current_date->format('Y-m');
+        $start_date_obj = new DateTime($start_date);
+        $days_in_month = (int)$current_date->format('t');
+        $usage_days = 0;
+
+        if ($start_date_obj->format('Y-m') === $current_month) {
+            $interval = $start_date_obj->diff($current_date);
+            $usage_days = max(1, $interval->days + 1);
+        } else {
+            $usage_days = (int)$current_date->format('j');
+        }
+        $usage_ratio = $usage_days / $days_in_month;
+
+        // Kiểm tra utility_usage
+        $stmt = $pdo->prepare("
+            SELECT u.id, u.usage_amount, u.month, s.price
+            FROM utility_usage u
+            JOIN services s ON u.service_id = s.id
+            WHERE u.room_id = ? 
+            AND u.month = ? 
+            AND u.contract_id = ? 
+            AND u.recorded_at >= ? 
+            AND u.recorded_at <= ?
+            AND u.deleted_at IS NULL
+        ");
+        $stmt->execute([$room_id, $current_month, $contract_id, $start_date, $due_date]);
+        $utility_usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($utility_usages)) {
+            responseJson([
+                'status' => 'error',
+                'message' => "Chưa có dữ liệu utility_usage cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
+            ], 400);
+            return;
+        }
+
+        // Tính tổng chi phí
+        $amount_due = round($room_price * $usage_ratio);
+        foreach ($utility_usages as $usage) {
+            $amount_due += $usage['usage_amount'] * $usage['price'];
+        }
+        $amount_due = round($amount_due);
+
         $pdo->beginTransaction();
 
+        // Cập nhật hóa đơn
         $stmt = $pdo->prepare("
             UPDATE invoices
             SET amount = ?, due_date = ?, status = ?, created_at = NOW()
             WHERE id = ?
         ");
-        $stmt->execute([$amount, $due_date, $status, $invoice_id]);
+        $stmt->execute([$amount_due, $due_date, $status, $invoice_id]);
 
+        // Cập nhật hoặc tạo bản ghi thanh toán nếu trạng thái là 'paid'
         if ($status === 'paid') {
             $stmt = $pdo->prepare("
                 SELECT id FROM payments
                 WHERE contract_id = ? AND due_date = ?
             ");
-            $stmt->execute([$invoice['contract_id'], $due_date]);
+            $stmt->execute([$contract_id, $due_date]);
             $payment = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($payment) {
@@ -621,13 +761,13 @@ function updateInvoice($invoice_id) {
                     SET amount = ?, payment_date = CURDATE(), status = 'paid'
                     WHERE id = ?
                 ");
-                $stmt->execute([$amount, $payment['id']]);
+                $stmt->execute([$amount_due, $payment['id']]);
             } else {
                 $stmt = $pdo->prepare("
                     INSERT INTO payments (contract_id, amount, due_date, payment_date, status, created_at)
                     VALUES (?, ?, ?, CURDATE(), 'paid', NOW())
                 ");
-                $stmt->execute([$invoice['contract_id'], $amount, $due_date]);
+                $stmt->execute([$contract_id, $amount_due, $due_date]);
             }
         }
 
@@ -636,7 +776,7 @@ function updateInvoice($invoice_id) {
         createNotification(
             $pdo,
             $user_id,
-            "Đã cập nhật hóa đơn (ID: $invoice_id, Tổng: $amount, Trạng thái: $status) cho phòng {$invoice['room_name']}."
+            "Đã cập nhật hóa đơn (ID: $invoice_id, Tổng: $amount_due, Trạng thái: $status) cho phòng $room_name."
         );
 
         $stmt = $pdo->prepare("
@@ -657,7 +797,9 @@ function updateInvoice($invoice_id) {
             'data' => $updated_invoice
         ]);
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi cập nhật hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
@@ -771,7 +913,9 @@ function patchInvoice($invoice_id) {
             'data' => $updated_invoice
         ]);
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi cập nhật hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
@@ -833,7 +977,9 @@ function deleteInvoice($invoice_id) {
             'data' => ['id' => $invoice_id]
         ]);
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Lỗi xóa hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }

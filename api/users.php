@@ -570,10 +570,14 @@ function getCurrentUser() {
             responseJson(['status' => 'error', 'message' => 'Người dùng không tồn tại'], 404);
             return;
         }
+        $userData['exp'] = $user['exp'];
+        //$userData['bank_details'] = $userData['bank_details'] ? json_encode($userData['bank_details'], true) : null;
 
-        //$userData['bank_details'] = $userData['bank_details'] ? json_decode($userData['bank_details'], true) : null;
-
-        responseJson(['status' => 'success', 'data' => $userData]);
+        responseJson(['status' => 'success', 'data' => [
+            'token' => $user['token'],
+            'user' => $userData
+            ]
+        ]);
     } catch (PDOException $e) {
         error_log("Lỗi lấy thông tin người dùng ID $user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
