@@ -165,8 +165,8 @@ function createUser() {
     try {
         checkUserExists($pdo, $userData['email'], $userData['username']);
         $stmt = $pdo->prepare("
-            INSERT INTO users (username, name, email, password, phone, role, status, provider, created_by, bank_details, qr_code_url, dob)
-            VALUES (?, ?, ?, ?, ?, ?, 'inactive', 'email', ?, ?, ?, ?)
+            INSERT INTO users (username, name, email, password, phone, role, status, provider, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, 'inactive', 'email', ?)
         ");
         $stmt->execute([
             $userData['username'],
@@ -175,10 +175,7 @@ function createUser() {
             $password,
             $userData['phone'] ?? null,
             $input_role,
-            $user_id,
-            isset($userData['bank_details']) ? json_encode($userData['bank_details']) : null,
-            $userData['qr_code_url'] ?? null,
-            $userData['dob'] ?? null
+            $user_id
         ]);
 
         $newUserId = $pdo->lastInsertId();

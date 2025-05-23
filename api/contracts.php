@@ -98,6 +98,18 @@ function getContracts() {
     }
 }
 
+function checkBranchHasEssentialServices(PDO $pdo, int $branchId): bool {
+    $stmt = $pdo->prepare("
+        SELECT type 
+        FROM services 
+        WHERE branch_id = ? AND deleted_at IS NULL AND type IN ('electricity', 'water')
+    ");
+    $stmt->execute([$branchId]);
+    $types = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    return in_array('electricity', $types) && in_array('water', $types);
+}
+
 // Tạo hợp đồng
 function createContract() {
     $pdo = getDB();
@@ -153,7 +165,13 @@ function createContract() {
             responseJson(['status' => 'error', 'message' => 'Phòng đã có hợp đồng đang hoạt động'], 400);
             return;
         }
-
+        if (!checkBranchHasEssentialServices($pdo, $data['branch_id'])) {
+            responseJson([
+                'status' => 'error',
+                'message' => 'Chi nhánh phải có đầy đủ cả hai dịch vụ: điện và nước trước khi tạo hợp đồng'
+            ], 400);
+            return;
+        }
         // Tạo hợp đồng
         $stmt = $pdo->prepare("
             INSERT INTO contracts 

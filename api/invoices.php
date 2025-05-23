@@ -361,15 +361,18 @@ function getInvoiceDetails($invoice_id) {
     }
 
     try {
+        // Modified query to include customer details from users table
         $stmt = $pdo->prepare("
             SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at,
-                   c.room_id, r.name AS room_name, b.name AS branch_name,
-                   u.phone AS owner_phone, u.qr_code_url, u.bank_details
+                   c.room_id, c.user_id AS customer_id, r.name AS room_name, b.name AS branch_name,
+                   u.phone AS owner_phone, u.qr_code_url, u.bank_details,
+                   cu.name AS customer_name, cu.phone AS customer_phone, cu.email AS customer_email
             FROM invoices i
             JOIN contracts c ON i.contract_id = c.id
             JOIN rooms r ON c.room_id = r.id
             JOIN branches b ON i.branch_id = b.id
             JOIN users u ON b.owner_id = u.id
+            JOIN users cu ON c.user_id = cu.id
             WHERE i.id = ? AND i.deleted_at IS NULL
         ");
         $stmt->execute([$invoice_id]);
@@ -409,15 +412,17 @@ function getInvoiceDetails($invoice_id) {
             SELECT s.id AS service_id, s.name AS service_name, s.price, u.usage_amount, s.unit
             FROM utility_usage u
             JOIN services s ON u.service_id = s.id
-            WHERE u.room_id = ? AND u.month = ? AND u.deleted_at IS NULL
+            WHERE u.room_id = ? AND u.contract_id = ? AND u.month = ? AND u.deleted_at IS NULL
         ");
-        $stmt->execute([$invoice['room_id'], $month]);
+        $stmt->execute([$invoice['room_id'], $invoice['contract_id'], $month]);
         $usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $details = [
             [
                 'service_id' => null,
-                'amount' => (float)$invoice['amount'],
+                'amount' => (float)$invoice['amount'] - array_sum(array_map(function($usage) {
+                    return $usage['usage_amount'] * $usage['price'];
+                }, $usages)),
                 'usage_amount' => null,
                 'description' => "Tiền phòng ({$invoice['room_name']})",
                 'service_name' => 'Room Price'
@@ -428,6 +433,8 @@ function getInvoiceDetails($invoice_id) {
             $details[] = [
                 'service_id' => $usage['service_id'],
                 'amount' => (float)($usage['usage_amount'] * $usage['price']),
+                'unit' => $usage['unit'],
+                'price' => (float)$usage['price'],
                 'usage_amount' => (float)$usage['usage_amount'],
                 'description' => "Tiền {$usage['service_name']} ({$usage['usage_amount']} {$usage['unit']})",
                 'service_name' => $usage['service_name']
@@ -435,12 +442,50 @@ function getInvoiceDetails($invoice_id) {
         }
 
         $invoice['bank_details'] = $invoice['bank_details'] ? json_decode($invoice['bank_details'], true) : null;
+       
+        if (!empty($invoice['qr_code_url'])) {
+            // Lấy tên tệp từ URL
+            $filename = basename($invoice['qr_code_url']);
+            error_log("QR code filename: $filename");
+            $imagePath = __DIR__ . '/../uploads/qr_codes/' . $filename;
+            
+            if (file_exists($imagePath)) {
+                // Đọc nội dung tệp hình ảnh
+                $imageData = file_get_contents($imagePath);
+                if ($imageData !== false) {
+                    // Chuyển đổi thành base64
+                    $base64 = 'data:image/png;base64,' . base64_encode($imageData);
+                    $invoice['qr_code_url'] = $base64; // Thay URL bằng chuỗi base64
+                } else {
+                    $invoice['qr_code_url'] = ''; // Nếu không đọc được tệp
+                    error_log("Failed to read QR code image: $imagePath");
+                }
+            } else {
+                $invoice['qr_code_url'] = ''; // Nếu tệp không tồn tại
+                error_log("QR code image not found: $imagePath");
+            }
+        }
+
+        // Create customer array
+        $customer = [
+            'id' => $invoice['customer_id'],
+            'name' => $invoice['customer_name'],
+            'phone' => $invoice['customer_phone'],
+            'email' => $invoice['customer_email']
+        ];
+
+        // Remove customer fields from invoice array to avoid duplication
+        unset($invoice['customer_id']);
+        unset($invoice['customer_name']);
+        unset($invoice['customer_phone']);
+        unset($invoice['customer_email']);
 
         responseJson([
             'status' => 'success',
             'data' => [
                 'invoice' => $invoice,
-                'details' => $details
+                'details' => $details,
+                'customer' => $customer
             ]
         ]);
     } catch (PDOException $e) {
