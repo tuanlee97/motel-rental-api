@@ -1000,4 +1000,145 @@ function getUtilityUsageSummary() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
+
+// // Lấy chi tiết hoặc danh sách số điện, nước (GET /utility_usage/{id} hoặc GET /utility_usage?room_id=...&service_id=...)
+// function getUtilityUsageById($usage_id = null) {
+//     $pdo = getDB();
+//     $user = verifyJWT();
+//     $user_id = $user['user_id'];
+//     $role = $user['role'];
+
+//     if (!in_array($role, ['admin', 'owner', 'employee'])) {
+//         responseJson(['status' => 'error', 'message' => 'Không có quyền xem số điện, nước'], 403);
+//         return;
+//     }
+
+//     // Nếu có usage_id, trả về chi tiết 1 bản ghi
+//     if ($usage_id !== null) {
+//         try {
+//             $stmt = $pdo->prepare("
+//                 SELECT u.id, u.room_id, u.contract_id, u.service_id, u.month, u.usage_amount, u.old_reading, u.new_reading, u.recorded_at,
+//                        s.name AS service_name, r.name AS room_name, b.name AS branch_name, b.id AS branch_id
+//                 FROM utility_usage u
+//                 JOIN services s ON u.service_id = s.id
+//                 JOIN rooms r ON u.room_id = r.id
+//                 JOIN branches b ON r.branch_id = b.id
+//                 WHERE u.id = ? AND u.deleted_at IS NULL
+//             ");
+//             $stmt->execute([$usage_id]);
+//             $usage = $stmt->fetch(PDO::FETCH_ASSOC);
+//             if (!$usage) {
+//                 responseJson(['status' => 'error', 'message' => 'Bản ghi không tồn tại'], 404);
+//                 return;
+//             }
+//             // Kiểm tra quyền owner/employee chỉ xem được phòng thuộc chi nhánh mình quản lý
+//             if ($role === 'owner' || $role === 'employee') {
+//                 $stmt = $pdo->prepare("
+//                     SELECT 1 FROM rooms r
+//                     JOIN branches b ON r.branch_id = b.id
+//                     WHERE r.id = ? AND (b.owner_id = ? OR EXISTS (
+//                         SELECT 1 FROM employee_assignments ea WHERE ea.branch_id = b.id AND ea.employee_id = ?
+//                     ))
+//                 ");
+//                 $stmt->execute([$usage['room_id'], $user_id, $user_id]);
+//                 if (!$stmt->fetch()) {
+//                     responseJson(['status' => 'error', 'message' => 'Không có quyền xem bản ghi này'], 403);
+//                     return;
+//                 }
+//             }
+//             responseJson([
+//                 'status' => 'success',
+//                 'data' => $usage
+//             ]);
+//         } catch (PDOException $e) {
+//             error_log("Lỗi lấy chi tiết số điện, nước: " . $e->getMessage());
+//             responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+//         }
+//         return;
+//     }
+
+//     // Nếu không có usage_id, trả về danh sách có phân trang
+//     $room_id = isset($_GET['room_id']) ? (int)$_GET['room_id'] : null;
+//     $contract_id = isset($_GET['contract_id']) ? (int)$_GET['contract_id'] : null;
+//     $service_id = isset($_GET['service_id']) ? (int)$_GET['service_id'] : null;
+//     $month = isset($_GET['month']) ? $_GET['month'] : null;
+//     $branch_id = isset($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
+//     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
+//     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
+//     $offset = ($page - 1) * $limit;
+
+//     $conditions = ['u.deleted_at IS NULL'];
+//     $params = [];
+//     if ($room_id) {
+//         $conditions[] = 'u.room_id = :room_id';
+//         $params['room_id'] = $room_id;
+//     }
+//     if ($contract_id) {
+//         $conditions[] = 'u.contract_id = :contract_id';
+//         $params['contract_id'] = $contract_id;
+//     }
+//     if ($service_id) {
+//         $conditions[] = 'u.service_id = :service_id';
+//         $params['service_id'] = $service_id;
+//     }
+//     if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
+//         $conditions[] = 'u.month = :month';
+//         $params['month'] = $month;
+//     }
+//     if ($branch_id) {
+//         $conditions[] = 'r.branch_id = :branch_id';
+//         $params['branch_id'] = $branch_id;
+//     }
+//     if ($role === 'owner' || $role === 'employee') {
+//         $conditions[] = 'r.branch_id IN (
+//             SELECT id FROM branches WHERE owner_id = :owner_id OR id IN (
+//                 SELECT branch_id FROM employee_assignments WHERE employee_id = :employee_id
+//             )
+//         )';
+//         $params['owner_id'] = $user_id;
+//         $params['employee_id'] = $user_id;
+//     }
+//     $where_clause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
+//     $query = "
+//         SELECT u.id, u.room_id, u.contract_id, u.service_id, u.month, u.usage_amount, u.old_reading, u.new_reading, u.recorded_at,
+//                s.name AS service_name, r.name AS room_name, b.name AS branch_name, b.id AS branch_id
+//         FROM utility_usage u
+//         JOIN services s ON u.service_id = s.id
+//         JOIN rooms r ON u.room_id = r.id
+//         JOIN branches b ON r.branch_id = b.id
+//         $where_clause
+//         ORDER BY u.recorded_at DESC
+//         LIMIT $limit OFFSET $offset
+//     ";
+//     try {
+//         $count_query = "
+//             SELECT COUNT(*) FROM utility_usage u
+//             JOIN rooms r ON u.room_id = r.id
+//             $where_clause
+//         ";
+//         $count_stmt = $pdo->prepare($count_query);
+//         $count_params = array_filter($params, fn($key) => !in_array($key, ['limit', 'offset']), ARRAY_FILTER_USE_KEY);
+//         $count_stmt->execute($count_params);
+//         $total_records = $count_stmt->fetchColumn();
+//         $total_pages = ceil($total_records / $limit);
+
+//         $stmt = $pdo->prepare($query);
+//         $stmt->execute($params);
+//         $usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+//         responseJson([
+//             'status' => 'success',
+//             'data' => $usages,
+//             'pagination' => [
+//                 'current_page' => $page,
+//                 'limit' => $limit,
+//                 'total_records' => $total_records,
+//                 'total_pages' => $total_pages
+//             ]
+//         ]);
+//     } catch (PDOException $e) {
+//         error_log("Lỗi lấy danh sách số điện, nước: " . $e->getMessage());
+//         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+//     }
+// }
 ?>

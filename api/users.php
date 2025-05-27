@@ -136,7 +136,7 @@ function createUser() {
     $userData['email'] = validateEmail($userData['email']);
     $password = password_hash($input['password'], PASSWORD_DEFAULT);
     $input_role = in_array($input['role'], ['employee', 'customer']) ? $input['role'] : null;
-
+    $status = $input_role === 'customer' ? 'active' : 'inactive';
     if (!$input_role) {
         responseJson(['status' => 'error', 'message' => 'Vai trò không hợp lệ'], 400);
         return;
@@ -166,7 +166,7 @@ function createUser() {
         checkUserExists($pdo, $userData['email'], $userData['username']);
         $stmt = $pdo->prepare("
             INSERT INTO users (username, name, email, password, phone, role, status, provider, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, 'inactive', 'email', ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'email', ?)
         ");
         $stmt->execute([
             $userData['username'],
@@ -175,6 +175,7 @@ function createUser() {
             $password,
             $userData['phone'] ?? null,
             $input_role,
+            $status,
             $user_id
         ]);
 
@@ -210,12 +211,52 @@ function updateUser() {
     $pdo = getDB();
     $user = verifyJWT();
     $user_id = $user['user_id'];
+    $user_role = $user['role'];
     $target_user_id = getResourceIdFromUri('#/users/([0-9]+)#');
 
-    // Kiểm tra người dùng chỉ được cập nhật thông tin của chính mình
+    // Kiểm tra quyền cập nhật
     if ($user_id != $target_user_id) {
-        responseJson(['status' => 'error', 'message' => 'Bạn chỉ có thể cập nhật thông tin của chính mình'], 403);
-        return;
+        // Admin có thể cập nhật bất kỳ người dùng nào
+        if ($user_role === 'admin') {
+            // Bỏ qua kiểm tra, admin có toàn quyền
+        } 
+        // Employee chỉ có thể cập nhật khách hàng trong chi nhánh được phân công
+        elseif ($user_role === 'employee') {
+            $stmt = $pdo->prepare("
+                SELECT bc.user_id
+                FROM branch_customers bc
+                JOIN employee_assignments ea ON bc.branch_id = ea.branch_id
+                WHERE ea.employee_id = ? AND bc.user_id = ? AND bc.user_id IN (
+                    SELECT id FROM users WHERE role = 'customer' AND deleted_at IS NULL
+                )
+            ");
+            $stmt->execute([$user_id, $target_user_id]);
+            if (!$stmt->fetch()) {
+                responseJson(['status' => 'error', 'message' => 'Bạn không có quyền cập nhật thông tin của người dùng này'], 403);
+                return;
+            }
+        } 
+        // Owner chỉ có thể cập nhật khách hàng trong chi nhánh của họ
+        elseif ($user_role === 'owner') {
+            $stmt = $pdo->prepare("
+                SELECT bc.user_id
+                FROM branch_customers bc
+                JOIN branches b ON bc.branch_id = b.id
+                WHERE b.owner_id = ? AND bc.user_id = ? AND bc.user_id IN (
+                    SELECT id FROM users WHERE role = 'customer' AND deleted_at IS NULL
+                )
+            ");
+            $stmt->execute([$user_id, $target_user_id]);
+            if (!$stmt->fetch()) {
+                responseJson(['status' => 'error', 'message' => 'Bạn không có quyền cập nhật thông tin của người dùng này'], 403);
+                return;
+            }
+        } 
+        // Các vai trò khác (customer) không được phép cập nhật người dùng khác
+        else {
+            responseJson(['status' => 'error', 'message' => 'Bạn chỉ có thể cập nhật thông tin của chính mình'], 403);
+            return;
+        }
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
@@ -272,7 +313,10 @@ function updateUser() {
         $updates[] = "qr_code_url = ?";
         $params[] = sanitizeInput($input['qr_code_url']);
     }
-
+    if (isset($input['status'])) {
+        $updates[] = "status = ?";
+        $params[] = sanitizeInput($input['status']);
+    }
     if (isset($input['dob'])) {
         $dob = DateTime::createFromFormat('Y-m-d', $input['dob']);
         if (!$dob || $dob->format('Y-m-d') !== $input['dob']) {
@@ -306,6 +350,7 @@ function updateUser() {
         $query = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?";
         $params[] = $target_user_id;
         $stmt = $pdo->prepare($query);
+
         $stmt->execute($params);
 
         createNotification($pdo, $target_user_id, "Thông tin tài khoản {$userData['username']} đã được cập nhật.");

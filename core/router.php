@@ -259,11 +259,11 @@ function handleApiRequest($method, $uri)
             "handler" => "createBulkUtilityUsage",
             "middleware" => "auth:owner,employee",
         ],
-        "GET:utility_usage/([0-9]+)" => [
-            "file" => "../api/utility_usage.php",
-            "handler" => "getUtilityUsageById",
-            "middleware" => "auth:admin,owner,employee,customer",
-        ],
+        // "GET:utility_usage/([0-9]+)" => [
+        //     "file" => "../api/utility_usage.php",
+        //     "handler" => "getUtilityUsageById",
+        //     "middleware" => "auth:admin,owner,employee,customer",
+        // ],
         "PUT:utility_usage/([0-9]+)" => [
             "file" => "../api/utility_usage.php",
             "handler" => "updateUtilityUsage",
@@ -537,6 +537,32 @@ function handleApiRequest($method, $uri)
             "file" => "../api/branch_customers.php",
             "handler" => "deleteBranchCustomer",
             "middleware" => "auth:owner,employee",
+        ],
+        // Reports
+        "GET:reports/revenue/([0-9]+)" => [
+            "file" => "../api/reports.php",
+            "handler" => "getRevenueReport",
+            "middleware" => "auth:owner",
+        ],
+        "GET:reports/rooms/([0-9]+)" => [
+            "file" => "../api/reports.php",
+            "handler" => "getRoomStatusReport",
+            "middleware" => "auth:owner",
+        ],
+        "GET:reports/contracts/([0-9]+)" => [
+            "file" => "../api/reports.php",
+            "handler" => "getContractReport",
+            "middleware" => "auth:owner",
+        ],
+        "GET:reports/utility-usage/([0-9]+)" => [
+            "file" => "../api/reports.php",
+            "handler" => "getUtilityUsageReport",
+            "middleware" => "auth:owner",
+        ],
+        "GET:reports/maintenance/([0-9]+)" => [
+            "file" => "../api/reports.php",
+            "handler" => "getMaintenanceReport",
+            "middleware" => "auth:owner",
         ],
         // Config
         "GET:config" => [
