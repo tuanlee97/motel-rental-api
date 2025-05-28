@@ -66,36 +66,80 @@ function getNotifications() {
     ]);
 }
 
-function createNotification() {
-    $input = json_decode(file_get_contents('php://input'), true);
-    validateRequiredFields($input, ['user_id', 'message']);
+function createNotification($pdo, $user_id, $message) {
     $user = verifyJWT();
+    $creator_id = $user['user_id'];
+    $creator_role = $user['role'];
 
-    $userId = filter_var($input['user_id'], FILTER_VALIDATE_INT);
-    $message = sanitizeInput($input['message']);
-    $isRead = isset($input['is_read']) ? filter_var($input['is_read'], FILTER_VALIDATE_BOOLEAN) : false;
+    // Sanitize input
+    $user_id = filter_var($user_id, FILTER_VALIDATE_INT);
+    $message = sanitizeInput($message);
+    $is_read = false; // Default value for is_read
 
-    if (!$userId) {
-        responseJson(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ'], 400);
+    if (!$user_id) {
+        responseJson(['status' => 'error', 'message' => 'ID người dùng không hợp lệ'], 400);
+        return;
     }
 
-    $pdo = getDB();
     try {
-        if ($user['role'] !== 'admin') {
-            responseJson(['status' => 'error', 'message' => 'Chỉ admin có quyền tạo thông báo'], 403);
+        // Check if target user exists
+        checkResourceExists($pdo, 'users', $user_id);
+
+        // Permission check
+        if ($creator_role !== 'admin') {
+            if ($creator_role === 'owner') {
+                // Owner can notify employees/customers in their branches
+                $stmt = $pdo->prepare("
+                    SELECT 1 FROM users u
+                    LEFT JOIN branch_customers bc ON u.id = bc.user_id
+                    LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
+                    JOIN branches b ON (bc.branch_id = b.id OR ea.branch_id = b.id)
+                    WHERE u.id = ? AND b.owner_id = ? AND u.role IN ('employee', 'customer') AND u.deleted_at IS NULL
+                ");
+                $stmt->execute([$user_id, $creator_id]);
+                if (!$stmt->fetch()) {
+                    responseJson(['status' => 'error', 'message' => 'Bạn không có quyền gửi thông báo cho người dùng này'], 403);
+                    return;
+                }
+            } elseif ($creator_role === 'employee') {
+                // Employee can notify customers in their assigned branches or those they created
+                $stmt = $pdo->prepare("
+                    SELECT 1 FROM users u
+                    JOIN branch_customers bc ON u.id = bc.user_id
+                    JOIN employee_assignments ea ON bc.branch_id = ea.branch_id
+                    WHERE u.id = ? AND ea.employee_id = ? AND u.role = 'customer' AND u.deleted_at IS NULL
+                ");
+                $stmt->execute([$user_id, $creator_id]);
+                if (!$stmt->fetch()) {
+                    $stmt = $pdo->prepare("
+                        SELECT 1 FROM users u
+                        JOIN branch_customers bc ON u.id = bc.user_id
+                        WHERE u.id = ? AND bc.created_by = ? AND u.role = 'customer' AND u.deleted_at IS NULL
+                    ");
+                    $stmt->execute([$user_id, $creator_id]);
+                    if (!$stmt->fetch()) {
+                        responseJson(['status' => 'error', 'message' => 'Bạn không có quyền gửi thông báo cho người dùng này'], 403);
+                        return;
+                    }
+                }
+            } else {
+                // Customers cannot create notifications for others
+                responseJson(['status' => 'error', 'message' => 'Bạn không có quyền tạo thông báo'], 403);
+                return;
+            }
         }
 
-        checkResourceExists($pdo, 'users', $userId);
+        // Insert notification
         $stmt = $pdo->prepare("
-            INSERT INTO notifications (user_id, message, is_read)
-            VALUES (?, ?, ?)
+            INSERT INTO notifications (user_id, message, is_read, created_at)
+            VALUES (?, ?, ?, NOW())
         ");
-        $stmt->execute([$userId, $message, $isRead]);
+        $stmt->execute([$user_id, $message, $is_read]);
 
-        $notificationId = $pdo->lastInsertId();
-        responseJson(['status' => 'success', 'data' => ['notification_id' => $notificationId]]);
+        $notification_id = $pdo->lastInsertId();
+        responseJson(['status' => 'success', 'data' => ['notification_id' => $notification_id]]);
     } catch (Exception $e) {
-        logError('Lỗi tạo notification: ' . $e->getMessage());
+        error_log("Lỗi tạo notification: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }

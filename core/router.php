@@ -539,31 +539,118 @@ function handleApiRequest($method, $uri)
             "middleware" => "auth:owner,employee",
         ],
         // Reports
-        "GET:reports/revenue/([0-9]+)" => [
-            "file" => "../api/reports.php",
-            "handler" => "getRevenueReport",
-            "middleware" => "auth:owner",
-        ],
-        "GET:reports/rooms/([0-9]+)" => [
-            "file" => "../api/reports.php",
-            "handler" => "getRoomStatusReport",
-            "middleware" => "auth:owner",
-        ],
-        "GET:reports/contracts/([0-9]+)" => [
-            "file" => "../api/reports.php",
-            "handler" => "getContractReport",
-            "middleware" => "auth:owner",
-        ],
-        "GET:reports/utility-usage/([0-9]+)" => [
-            "file" => "../api/reports.php",
-            "handler" => "getUtilityUsageReport",
-            "middleware" => "auth:owner",
-        ],
-        "GET:reports/maintenance/([0-9]+)" => [
-            "file" => "../api/reports.php",
-            "handler" => "getMaintenanceReport",
-            "middleware" => "auth:owner",
-        ],
+ // Reports - Admin: Reports for all branches
+    "GET:reports/revenue/all" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAllBranchesRevenueReport",
+        "middleware" => "auth:admin",
+    ],
+    "GET:reports/rooms/all" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAllBranchesRoomStatusReport",
+        "middleware" => "auth:admin",
+    ],
+    "GET:reports/contracts/all" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAllBranchesContractReport",
+        "middleware" => "auth:admin",
+    ],
+    "GET:reports/utility-usage/all" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAllBranchesUtilityUsageReport",
+        "middleware" => "auth:admin",
+    ],
+    "GET:reports/maintenance/all" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAllBranchesMaintenanceReport",
+        "middleware" => "auth:admin",
+    ],
+
+    // Reports - Owner: Reports for owned branches
+    "GET:reports/revenue/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getRevenueReport",
+        "middleware" => "auth:owner",
+    ],
+    "GET:reports/rooms/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getRoomStatusReport",
+        "middleware" => "auth:owner",
+    ],
+    "GET:reports/contracts/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getContractReport",
+        "middleware" => "auth:owner",
+    ],
+    "GET:reports/utility-usage/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getUtilityUsageReport",
+        "middleware" => "auth:owner",
+    ],
+    "GET:reports/maintenance/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getMaintenanceReport",
+        "middleware" => "auth:owner",
+    ],
+
+    // Reports - Employee: Reports for assigned branches
+    "GET:reports/revenue/employee/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAssignedBranchesRevenueReport",
+        "middleware" => "auth:employee",
+    ],
+    "GET:reports/rooms/employee/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAssignedBranchesRoomStatusReport",
+        "middleware" => "auth:employee",
+    ],
+    "GET:reports/contracts/employee/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAssignedBranchesContractReport",
+        "middleware" => "auth:employee",
+    ],
+    "GET:reports/utility-usage/employee/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAssignedBranchesUtilityUsageReport",
+        "middleware" => "auth:employee",
+    ],
+    "GET:reports/maintenance/employee/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getAssignedBranchesMaintenanceReport",
+        "middleware" => "auth:employee",
+    ],
+
+    // Reports - Customer: User-specific reports
+    "GET:reports/customer/([0-9]+)/contracts" => [
+        "file" => "../api/reports.php",
+        "handler" => "getCustomerContracts",
+        "middleware" => "auth:customer",
+    ],
+    "GET:reports/customer/([0-9]+)/invoices" => [
+        "file" => "../api/reports.php",
+        "handler" => "getCustomerInvoices",
+        "middleware" => "auth:customer",
+    ],
+    "GET:reports/customer/([0-9]+)/utility-usage" => [
+        "file" => "../api/reports.php",
+        "handler" => "getCustomerUtilityUsage",
+        "middleware" => "auth:customer",
+    ],
+    "GET:reports/customer/([0-9]+)/maintenance" => [
+        "file" => "../api/reports.php",
+        "handler" => "getCustomerMaintenanceRequests",
+        "middleware" => "auth:customer",
+    ],
+    "POST:reports/customer/([0-9]+)/maintenance" => [
+        "file" => "../api/reports.php",
+        "handler" => "createCustomerMaintenanceRequest",
+        "middleware" => "auth:customer",
+    ],
+    "GET:reports/customer/([0-9]+)/invoices/([0-9]+)" => [
+        "file" => "../api/reports.php",
+        "handler" => "getCustomerInvoiceDetails",
+        "middleware" => "auth:customer",
+    ],
         // Config
         "GET:config" => [
             "file" => "../api/utils/config.php",

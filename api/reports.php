@@ -1,9 +1,8 @@
 <?php
 require_once __DIR__ . '/../core/database.php';
-require_once __DIR__ . '/core/helpers.php';
-require_once __DIR__ . '/core/auth.php';
+require_once __DIR__ . '/../core/helpers.php';
+require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/utils/common.php';
-
 // Admin: Revenue Report for All Branches
 function getAllBranchesRevenueReport() {
     $pdo = getDB();
@@ -1419,13 +1418,17 @@ function getCustomerContracts($userId) {
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
 
-    $status = isset($_GET['status']) ? $_GET['status'] : null;
+    $status = isset($_GET['status']) ? $_GET['status'] : 'active'; // Default to 'active'
     $conditions = ['c.user_id = ? AND c.deleted_at IS NULL'];
     $params = [$userId];
 
     if ($status && in_array($status, ['active', 'expired', 'ended', 'cancelled'])) {
         $conditions[] = 'c.status = ?';
         $params[] = $status;
+    } else {
+        // If status is invalid, default to active
+        $conditions[] = 'c.status = ?';
+        $params[] = 'active';
     }
 
     $where_clause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
@@ -1600,7 +1603,6 @@ function getCustomerUtilityUsage($userId) {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
 // Customer: Get Maintenance Requests
 function getCustomerMaintenanceRequests($userId) {
     $pdo = getDB();
@@ -1630,7 +1632,8 @@ function getCustomerMaintenanceRequests($userId) {
 
     $query = "
         SELECT 
-            mr.id, r.name AS room_name, mr.description, mr.status, mr.created_at
+            mr.id, mr.room_id, mr.description, mr.status, mr.created_at,
+            r.name AS room_name
         FROM maintenance_requests mr
         JOIN rooms r ON mr.room_id = r.id
         $where_clause
@@ -1661,7 +1664,212 @@ function getCustomerMaintenanceRequests($userId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách yêu cầu bảo trì: " . $e->getMessage());
+        error_log("Lỗi lấy yêu cầu bảo trì khách hàng: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+    }
+}
+
+// Customer: Create Maintenance Request
+function createCustomerMaintenanceRequest($userId) {
+    $pdo = getDB();
+    $user = verifyJWT();
+    $current_user_id = $user['user_id'];
+    $role = $user['role'];
+
+    if ($role !== 'customer' || $current_user_id !== (int)$userId) {
+        responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
+        return;
+    }
+
+    // Đọc dữ liệu từ body
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!isset($input['room_id']) || !isset($input['description'])) {
+        responseJson(['status' => 'error', 'message' => 'Thiếu thông tin phòng hoặc mô tả'], 400);
+        return;
+    }
+
+    $room_id = (int)$input['room_id'];
+    $description = trim($input['description']);
+
+    if (empty($description)) {
+        responseJson(['status' => 'error', 'message' => 'Mô tả không được để trống'], 400);
+        return;
+    }
+
+    try {
+        // Kiểm tra xem khách hàng có hợp đồng hoạt động với phòng này không
+        $stmt = $pdo->prepare("
+            SELECT c.id 
+            FROM contracts c 
+            WHERE c.user_id = ? AND c.room_id = ? AND c.status = 'active' AND c.deleted_at IS NULL
+        ");
+        $stmt->execute([$userId, $room_id]);
+        if (!$stmt->fetch()) {
+            responseJson(['status' => 'error', 'message' => 'Không có hợp đồng hoạt động với phòng này'], 403);
+            return;
+        }
+
+        // Tạo yêu cầu bảo trì
+        $query = "
+            INSERT INTO maintenance_requests (room_id, description, status, created_by, created_at)
+            VALUES (?, ?, 'pending', ?, NOW())
+        ";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute([$room_id, $description, $userId]);
+
+        $request_id = $pdo->lastInsertId();
+
+        // Lấy thông tin yêu cầu vừa tạo
+        $stmt = $pdo->prepare("
+            SELECT 
+                mr.id, mr.room_id, mr.description, mr.status, mr.created_at,
+                r.name AS room_name
+            FROM maintenance_requests mr
+            JOIN rooms r ON mr.room_id = r.id
+            WHERE mr.id = ?
+        ");
+        $stmt->execute([$request_id]);
+        $request = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        responseJson([
+            'status' => 'success',
+            'data' => $request,
+            'message' => 'Yêu cầu bảo trì đã được tạo thành công',
+        ], 201);
+    } catch (PDOException $e) {
+        error_log("Lỗi tạo yêu cầu bảo trì: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+    }
+}
+
+// Customer: Get Invoice Details
+function getCustomerInvoiceDetails($userId, $invoiceId) {
+    $pdo = getDB();
+    $user = verifyJWT();
+    $current_user_id = $user['user_id'];
+    $role = $user['role'];
+
+    if ($role !== 'customer' || $current_user_id !== (int)$userId) {
+        responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
+        return;
+    }
+
+    try {
+        // Lấy thông tin hóa đơn
+        $query = "
+            SELECT 
+                i.id, i.contract_id, CAST(i.amount AS DECIMAL) AS amount, i.due_date, i.status, i.created_at,
+                r.name AS room_name, c.start_date AS contract_start_date, c.end_date AS contract_end_date
+            FROM invoices i
+            JOIN contracts c ON i.contract_id = c.id
+            JOIN rooms r ON c.room_id = r.id
+            WHERE i.id = ? AND c.user_id = ? AND i.deleted_at IS NULL
+        ";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute([$invoiceId, $userId]);
+        $invoice = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$invoice) {
+            responseJson(['status' => 'error', 'message' => 'Hóa đơn không tồn tại hoặc không thuộc về bạn'], 404);
+            return;
+        }
+
+        // Lấy chi tiết sử dụng tiện ích liên quan đến hóa đơn (nếu có)
+        $usage_query = "
+            SELECT 
+                u.id, u.service_id, u.month, u.usage_amount, u.old_reading, u.new_reading,
+                s.name AS service_name, s.price AS service_price
+            FROM utility_usage u
+            JOIN services s ON u.service_id = s.id
+            WHERE u.contract_id = ? AND u.month = DATE_FORMAT(i.created_at, '%Y-%m') AND u.deleted_at IS NULL
+        ";
+        $stmt = $pdo->prepare($usage_query);
+        $stmt->execute([$invoice['contract_id']]);
+        $usages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        responseJson([
+            'status' => 'success',
+            'data' => [
+                'invoice' => $invoice,
+                'utility_usages' => $usages,
+            ],
+        ]);
+    } catch (PDOException $e) {
+        error_log("Lỗi lấy chi tiết hóa đơn: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+    }
+}
+
+// Get All Branches for Owner or Employee
+function getAllBranches() {
+    $pdo = getDB();
+    $user = verifyJWT();
+    $user_id = $user['user_id'];
+    $role = $user['role'];
+
+    if (!in_array($role, ['owner', 'employee'])) {
+        responseJson(['status' => 'error', 'message' => 'Chỉ chủ trọ hoặc nhân viên được phép truy cập'], 403);
+        return;
+    }
+
+    $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
+    $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
+    $offset = ($page - 1) * $limit;
+
+    try {
+        if ($role === 'owner') {
+            $query = "
+                SELECT 
+                    b.id, b.name, b.address, b.created_at
+                FROM branches b
+                WHERE b.owner_id = ? AND b.deleted_at IS NULL
+                ORDER BY b.created_at DESC
+                LIMIT $limit OFFSET $offset
+            ";
+            $count_query = "SELECT COUNT(*) FROM branches WHERE owner_id = ? AND deleted_at IS NULL";
+            $params = [$user_id];
+        } else { // role === 'employee'
+            $query = "
+                SELECT 
+                    b.id, b.name, b.address, b.created_at
+                FROM branches b
+                JOIN branch_employees be ON b.id = be.branch_id
+                WHERE be.employee_id = ? AND b.deleted_at IS NULL
+                ORDER BY b.created_at DESC
+                LIMIT $limit OFFSET $offset
+            ";
+            $count_query = "
+                SELECT COUNT(*) 
+                FROM branches b
+                JOIN branch_employees be ON b.id = be.branch_id
+                WHERE be.employee_id = ? AND b.deleted_at IS NULL
+            ";
+            $params = [$user_id];
+        }
+
+        // Đếm tổng số bản ghi
+        $count_stmt = $pdo->prepare($count_query);
+        $count_stmt->execute($params);
+        $total_records = $count_stmt->fetchColumn();
+        $total_pages = ceil($total_records / $limit);
+
+        // Lấy danh sách chi nhánh
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
+        $branches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        responseJson([
+            'status' => 'success',
+            'data' => $branches,
+            'pagination' => [
+                'current_page' => $page,
+                'limit' => $limit,
+                'total_records' => $total_records,
+                'total_pages' => $total_pages,
+            ],
+        ]);
+    } catch (PDOException $e) {
+        error_log("Lỗi lấy danh sách chi nhánh: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

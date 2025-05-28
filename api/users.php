@@ -16,7 +16,7 @@ function getUsers() {
     $offset = ($page - 1) * $limit;
 
     // Điều kiện lọc
-    $conditions = [];
+    $conditions = ['u.deleted_at IS NULL'];
     $params = [];
 
     // Xử lý vai trò
@@ -42,39 +42,43 @@ function getUsers() {
 
     // Phân quyền
     if ($role === 'admin') {
-        // Admin thấy tất cả
+        // Admin thấy tất cả người dùng
     } elseif ($role === 'owner') {
+        // Owner chỉ thấy nhân viên và khách hàng trong chi nhánh của họ
         $conditions[] = "(
             u.id IN (
                 SELECT ea.employee_id FROM employee_assignments ea 
                 JOIN branches b ON ea.branch_id = b.id 
-                WHERE b.owner_id = ?
+                WHERE b.owner_id = ? AND ea.deleted_at IS NULL
             ) OR u.id IN (
                 SELECT bc.user_id FROM branch_customers bc 
                 JOIN branches b ON bc.branch_id = b.id 
-                WHERE b.owner_id = ?
+                WHERE b.owner_id = ? AND bc.deleted_at IS NULL
             )
         )";
         $params[] = $user_id;
         $params[] = $user_id;
     } elseif ($role === 'employee') {
+        // Employee chỉ thấy khách hàng mà họ tạo hoặc trong chi nhánh được phân công
         $conditions[] = "(
             u.id IN (
                 SELECT bc.user_id FROM branch_customers bc 
-                WHERE bc.created_by = ?
+                WHERE bc.created_by = ? AND bc.deleted_at IS NULL
             ) OR u.id IN (
-                SELECT ea.employee_id FROM employee_assignments ea 
-                WHERE ea.created_by = ?
+                SELECT bc.user_id FROM branch_customers bc 
+                JOIN employee_assignments ea ON bc.branch_id = ea.branch_id 
+                WHERE ea.employee_id = ? AND ea.deleted_at IS NULL AND bc.deleted_at IS NULL
             )
         )";
         $params[] = $user_id;
         $params[] = $user_id;
     } elseif ($role === 'customer') {
+        // Customer chỉ thấy chính họ hoặc người ở cùng phòng
         $conditions[] = "(
             u.id = ? OR u.id IN (
                 SELECT ro.user_id FROM room_occupants ro
                 JOIN room_occupants ro2 ON ro.room_id = ro2.room_id
-                WHERE ro2.user_id = ?
+                WHERE ro2.user_id = ? AND ro.deleted_at IS NULL AND ro2.deleted_at IS NULL
             )
         )";
         $params[] = $user_id;
@@ -136,27 +140,22 @@ function createUser() {
     $userData['email'] = validateEmail($userData['email']);
     $password = password_hash($input['password'], PASSWORD_DEFAULT);
     $input_role = in_array($input['role'], ['employee', 'customer']) ? $input['role'] : null;
-    $status = $input_role === 'customer' ? 'active' : 'inactive';
+    $status = $input_role === 'customer' ? 'active' : ($userData['status'] ?? 'inactive');
     if (!$input_role) {
         responseJson(['status' => 'error', 'message' => 'Vai trò không hợp lệ'], 400);
         return;
     }
 
+    // Kiểm tra quyền
     $allowed = false;
-    switch ($role) {
-        case 'admin':
-            $allowed = true;
-            break;
-        case 'owner':
-            $allowed = in_array($input_role, ['customer', 'employee']);
-            break;
-        case 'employee':
-            $allowed = $input_role === 'customer';
-            break;
-        default:
-            $allowed = false;
+    if ($role === 'admin') {
+        $allowed = true; // Admin có thể tạo bất kỳ vai trò nào
+    } elseif ($role === 'owner') {
+        $allowed = in_array($input_role, ['employee', 'customer']); // Owner chỉ tạo employee hoặc customer
+    } elseif ($role === 'employee') {
+        $allowed = $input_role === 'customer'; // Employee chỉ tạo customer
     }
-    
+
     if (!$allowed) {
         responseJson(['status' => 'error', 'message' => 'Bạn không có quyền tạo người dùng với vai trò này'], 403);
         return;
@@ -181,20 +180,22 @@ function createUser() {
 
         $newUserId = $pdo->lastInsertId();
 
-        if ($input_role === 'customer' && ($role === 'owner' || $role === 'employee')) {
-            $branch_id = ($role === 'owner') 
-                ? $pdo->query("SELECT id FROM branches WHERE owner_id = $user_id")->fetchColumn()
-                : $pdo->query("SELECT branch_id FROM employee_assignments WHERE employee_id = $user_id")->fetchColumn();
-            if ($branch_id) {
-                $stmt = $pdo->prepare("INSERT INTO branch_customers (branch_id, user_id, created_by) VALUES (?, ?, ?)");
-                $stmt->execute([$branch_id, $newUserId, $user_id]);
+        // Gán chi nhánh cho user mới nếu người tạo là owner hoặc employee
+        if (in_array($role, ['owner', 'employee']) && in_array($input_role, ['employee', 'customer'])) {
+            $branch_id = ($role === 'owner')
+                ? $pdo->query("SELECT id FROM branches WHERE owner_id = $user_id AND deleted_at IS NULL")->fetchColumn()
+                : $pdo->query("SELECT branch_id FROM employee_assignments WHERE employee_id = $user_id AND deleted_at IS NULL")->fetchColumn();
+            
+            if (!$branch_id) {
+                responseJson(['status' => 'error', 'message' => 'Không tìm thấy chi nhánh hợp lệ'], 400);
+                return;
             }
-        } elseif ($input_role === 'employee' && ($role === 'owner' || $role === 'employee')) {
-            $branch_id = ($role === 'owner') 
-                ? $pdo->query("SELECT id FROM branches WHERE owner_id = $user_id")->fetchColumn()
-                : $pdo->query("SELECT branch_id FROM employee_assignments WHERE employee_id = $user_id")->fetchColumn();
-            if ($branch_id) {
-                $stmt = $pdo->prepare("INSERT INTO employee_assignments (employee_id, branch_id, created_by) VALUES (?, ?, ?)");
+
+            if ($input_role === 'customer') {
+                $stmt = $pdo->prepare("INSERT INTO branch_customers (branch_id, user_id, created_by, created_at) VALUES (?, ?, ?, NOW())");
+                $stmt->execute([$branch_id, $newUserId, $user_id]);
+            } elseif ($input_role === 'employee') {
+                $stmt = $pdo->prepare("INSERT INTO employee_assignments (employee_id, branch_id, created_by, created_at) VALUES (?, ?, ?, NOW())");
                 $stmt->execute([$newUserId, $branch_id, $user_id]);
             }
         }
@@ -214,46 +215,46 @@ function updateUser() {
     $user_role = $user['role'];
     $target_user_id = getResourceIdFromUri('#/users/([0-9]+)#');
 
-    // Kiểm tra quyền cập nhật
+    // Kiểm tra quyền
     if ($user_id != $target_user_id) {
-        // Admin có thể cập nhật bất kỳ người dùng nào
         if ($user_role === 'admin') {
-            // Bỏ qua kiểm tra, admin có toàn quyền
-        } 
-        // Employee chỉ có thể cập nhật khách hàng trong chi nhánh được phân công
-        elseif ($user_role === 'employee') {
+            // Admin có thể cập nhật bất kỳ người dùng nào
+        } elseif ($user_role === 'owner') {
+            // Owner chỉ cập nhật employee/customer trong chi nhánh của họ
             $stmt = $pdo->prepare("
-                SELECT bc.user_id
-                FROM branch_customers bc
+                SELECT 1 FROM users u
+                LEFT JOIN branch_customers bc ON u.id = bc.user_id
+                LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
+                JOIN branches b ON (bc.branch_id = b.id OR ea.branch_id = b.id)
+                WHERE u.id = ? AND b.owner_id = ? AND u.role IN ('employee', 'customer') AND u.deleted_at IS NULL
+            ");
+            $stmt->execute([$target_user_id, $user_id]);
+            if (!$stmt->fetch()) {
+                responseJson(['status' => 'error', 'message' => 'Bạn không có quyền cập nhật người dùng này'], 403);
+                return;
+            }
+        } elseif ($user_role === 'employee') {
+            // Employee chỉ cập nhật customer trong chi nhánh được phân công hoặc do họ tạo
+            $stmt = $pdo->prepare("
+                SELECT 1 FROM users u
+                JOIN branch_customers bc ON u.id = bc.user_id
                 JOIN employee_assignments ea ON bc.branch_id = ea.branch_id
-                WHERE ea.employee_id = ? AND bc.user_id = ? AND bc.user_id IN (
-                    SELECT id FROM users WHERE role = 'customer' AND deleted_at IS NULL
-                )
+                WHERE u.id = ? AND ea.employee_id = ? AND u.role = 'customer' AND u.deleted_at IS NULL
             ");
-            $stmt->execute([$user_id, $target_user_id]);
+            $stmt->execute([$target_user_id, $user_id]);
             if (!$stmt->fetch()) {
-                responseJson(['status' => 'error', 'message' => 'Bạn không có quyền cập nhật thông tin của người dùng này'], 403);
-                return;
+                $stmt = $pdo->prepare("
+                    SELECT 1 FROM users u
+                    JOIN branch_customers bc ON u.id = bc.user_id
+                    WHERE u.id = ? AND bc.created_by = ? AND u.role = 'customer' AND u.deleted_at IS NULL
+                ");
+                $stmt->execute([$target_user_id, $user_id]);
+                if (!$stmt->fetch()) {
+                    responseJson(['status' => 'error', 'message' => 'Bạn không có quyền cập nhật người dùng này'], 403);
+                    return;
+                }
             }
-        } 
-        // Owner chỉ có thể cập nhật khách hàng trong chi nhánh của họ
-        elseif ($user_role === 'owner') {
-            $stmt = $pdo->prepare("
-                SELECT bc.user_id
-                FROM branch_customers bc
-                JOIN branches b ON bc.branch_id = b.id
-                WHERE b.owner_id = ? AND bc.user_id = ? AND bc.user_id IN (
-                    SELECT id FROM users WHERE role = 'customer' AND deleted_at IS NULL
-                )
-            ");
-            $stmt->execute([$user_id, $target_user_id]);
-            if (!$stmt->fetch()) {
-                responseJson(['status' => 'error', 'message' => 'Bạn không có quyền cập nhật thông tin của người dùng này'], 403);
-                return;
-            }
-        } 
-        // Các vai trò khác (customer) không được phép cập nhật người dùng khác
-        else {
+        } else {
             responseJson(['status' => 'error', 'message' => 'Bạn chỉ có thể cập nhật thông tin của chính mình'], 403);
             return;
         }
@@ -313,10 +314,12 @@ function updateUser() {
         $updates[] = "qr_code_url = ?";
         $params[] = sanitizeInput($input['qr_code_url']);
     }
-    if (isset($input['status'])) {
+
+    if (isset($input['status']) && in_array($input['status'], ['active', 'inactive', 'suspended'])) {
         $updates[] = "status = ?";
-        $params[] = sanitizeInput($input['status']);
+        $params[] = $input['status'];
     }
+
     if (isset($input['dob'])) {
         $dob = DateTime::createFromFormat('Y-m-d', $input['dob']);
         if (!$dob || $dob->format('Y-m-d') !== $input['dob']) {
@@ -344,16 +347,16 @@ function updateUser() {
     try {
         checkResourceExists($pdo, 'users', $target_user_id);
         if (isset($input['email']) || isset($input['username'])) {
-            checkUserExists($pdo, $userData['email'] ?? '', $userData['username'] ?? '', $target_user_id);
+            checkUserExists($pdo, $userData['email'] ?? null, $userData['username'] ?? null, $target_user_id);
         }
 
-        $query = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?";
+        $query = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ? AND deleted_at IS NULL";
         $params[] = $target_user_id;
         $stmt = $pdo->prepare($query);
-
         $stmt->execute($params);
 
-        createNotification($pdo, $target_user_id, "Thông tin tài khoản {$userData['username']} đã được cập nhật.");
+        $username = $userData['username'] ?? 'người dùng';
+        createNotification($pdo, $target_user_id, "Thông tin tài khoản $username đã được cập nhật.");
         responseJson(['status' => 'success', 'message' => 'Cập nhật thông tin thành công']);
     } catch (Exception $e) {
         error_log("Lỗi cập nhật người dùng ID $target_user_id: " . $e->getMessage());
@@ -367,6 +370,7 @@ function patchUser() {
     $user_id = $user['user_id'];
     $target_user_id = getResourceIdFromUri('#/users/([0-9]+)#');
 
+    // Chỉ cho phép patch thông tin của chính mình
     if ($user_id != $target_user_id) {
         responseJson(['status' => 'error', 'message' => 'Bạn chỉ có thể chỉnh sửa thông tin của chính mình'], 403);
         return;
@@ -374,20 +378,16 @@ function patchUser() {
 
     try {
         checkResourceExists($pdo, 'users', $target_user_id);
-        $rawInput = file_get_contents('php://input');
-        error_log("Raw input: " . $rawInput);
-        $input = json_decode($rawInput, true);
+        $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input) && json_last_error() !== JSON_ERROR_NONE) {
             error_log("JSON decode error: " . json_last_error_msg());
             responseJson(['status' => 'error', 'message' => 'Invalid JSON format'], 400);
             return;
         }
         if (empty($input)) {
-            error_log("Parsed input is empty");
             responseJson(['status' => 'error', 'message' => 'Không có dữ liệu được cung cấp'], 400);
             return;
         }
-        error_log("Parsed input: " . json_encode($input));
 
         $updates = [];
         $params = [];
@@ -449,18 +449,20 @@ function patchUser() {
             return;
         }
 
-        $query = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?";
+        $query = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ? AND deleted_at IS NULL";
         $params[] = $target_user_id;
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
 
-        createNotification($pdo, $target_user_id, "Thông tin tài khoản đã được cập nhật.");
+        $username = $input['username'] ?? 'người dùng';
+        createNotification($pdo, $target_user_id, "Thông tin tài khoản $username đã được cập nhật.");
         responseJson(['status' => 'success', 'message' => 'Cập nhật thông tin thành công']);
     } catch (Exception $e) {
         error_log("Lỗi patch người dùng ID $target_user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
+
 function deleteUser() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -468,41 +470,52 @@ function deleteUser() {
     $role = $user['role'];
     $target_user_id = getResourceIdFromUri('#/users/([0-9]+)#');
 
-    if ($role !== 'admin') {
-        if ($role === 'owner') {
+    // Kiểm tra quyền
+    if ($role === 'admin') {
+        // Admin có thể xóa bất kỳ người dùng nào
+    } elseif ($role === 'owner') {
+        // Owner chỉ xóa employee/customer trong chi nhánh của họ
+        $stmt = $pdo->prepare("
+            SELECT 1 FROM users u
+            LEFT JOIN branch_customers bc ON u.id = bc.user_id
+            LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
+            JOIN branches b ON (bc.branch_id = b.id OR ea.branch_id = b.id)
+            WHERE u.id = ? AND b.owner_id = ? AND u.role IN ('employee', 'customer') AND u.deleted_at IS NULL
+        ");
+        $stmt->execute([$target_user_id, $user_id]);
+        if (!$stmt->fetch()) {
+            responseJson(['status' => 'error', 'message' => 'Không có quyền xóa người dùng này'], 403);
+            return;
+        }
+    } elseif ($role === 'employee') {
+        // Employee chỉ xóa customer trong chi nhánh được phân công hoặc do họ tạo
+        $stmt = $pdo->prepare("
+            SELECT 1 FROM users u
+            JOIN branch_customers bc ON u.id = bc.user_id
+            JOIN employee_assignments ea ON bc.branch_id = ea.branch_id
+            WHERE u.id = ? AND ea.employee_id = ? AND u.role = 'customer' AND u.deleted_at IS NULL
+        ");
+        $stmt->execute([$target_user_id, $user_id]);
+        if (!$stmt->fetch()) {
             $stmt = $pdo->prepare("
                 SELECT 1 FROM users u
-                LEFT JOIN branch_customers bc ON u.id = bc.user_id
-                LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
-                JOIN branches b ON (bc.branch_id = b.id OR ea.branch_id = b.id)
-                WHERE u.id = ? AND b.owner_id = ?
+                JOIN branch_customers bc ON u.id = bc.user_id
+                WHERE u.id = ? AND bc.created_by = ? AND u.role = 'customer' AND u.deleted_at IS NULL
             ");
             $stmt->execute([$target_user_id, $user_id]);
             if (!$stmt->fetch()) {
                 responseJson(['status' => 'error', 'message' => 'Không có quyền xóa người dùng này'], 403);
                 return;
             }
-        } elseif ($role === 'employee') {
-            $stmt = $pdo->prepare("
-                SELECT 1 FROM users u
-                LEFT JOIN branch_customers bc ON u.id = bc.user_id
-                LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
-                WHERE u.id = ? AND (bc.created_by = ? OR ea.created_by = ?)
-            ");
-            $stmt->execute([$target_user_id, $user_id, $user_id]);
-            if (!$stmt->fetch()) {
-                responseJson(['status' => 'error', 'message' => 'Không có quyền xóa người dùng này'], 403);
-                return;
-            }
-        } else {
-            responseJson(['status' => 'error', 'message' => 'Không có quyền xóa'], 403);
-            return;
         }
+    } else {
+        responseJson(['status' => 'error', 'message' => 'Không có quyền xóa'], 403);
+        return;
     }
 
     try {
         checkResourceExists($pdo, 'users', $target_user_id);
-        $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
         $stmt->execute([$target_user_id]);
         responseJson(['status' => 'success', 'message' => 'Xóa người dùng thành công']);
     } catch (Exception $e) {
@@ -539,7 +552,7 @@ function registerUser() {
         $userId = $pdo->lastInsertId();
         $jwt = generateJWT($userId, 'customer');
         createNotification($pdo, $userId, "Chào mừng {$userData['username']} đã đăng ký!");
-        responseJson(['status' => 'success', 'data' => ['user' => $userData]]);
+        responseJson(['status' => 'success', 'data' => ['user' => $userData, 'token' => $jwt['token']]]);
     } catch (Exception $e) {
         error_log("Lỗi đăng ký người dùng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
@@ -561,7 +574,7 @@ function registerGoogleUser() {
     $name = sanitizeInput($googleData['name']);
 
     try {
-        $stmt = $pdo->prepare("SELECT id, provider FROM users WHERE email = ?");
+        $stmt = $pdo->prepare("SELECT id, provider FROM users WHERE email = ? AND deleted_at IS NULL");
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
@@ -572,8 +585,7 @@ function registerGoogleUser() {
             }
             $userId = $user['id'];
             $jwt = generateJWT($userId, 'customer');
-            $token = $jwt['token'];
-            responseJson(['status' => 'success', 'data' => ['token' => $token, 'user' => $user]]);
+            responseJson(['status' => 'success', 'data' => ['token' => $jwt['token'], 'user' => $user]]);
             return;
         }
 
@@ -585,9 +597,8 @@ function registerGoogleUser() {
 
         $userId = $pdo->lastInsertId();
         $jwt = generateJWT($userId, 'customer');
-        $token = $jwt['token'];
         createNotification($pdo, $userId, "Chào mừng $username đã đăng ký qua Google!");
-        responseJson(['status' => 'success', 'data' => ['token' => $token, 'user' => ['id' => $userId, 'username' => $username]]]);
+        responseJson(['status' => 'success', 'data' => ['token' => $jwt['token'], 'user' => ['id' => $userId, 'username' => $username]]]);
     } catch (Exception $e) {
         error_log("Lỗi đăng ký Google user: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
@@ -612,14 +623,13 @@ function getCurrentUser() {
             responseJson(['status' => 'error', 'message' => 'Người dùng không tồn tại'], 404);
             return;
         }
+        $userData['bank_details'] = $userData['bank_details'] ? json_decode($userData['bank_details'], true) : null;
         $userData['exp'] = $user['exp'];
-        //$userData['bank_details'] = $userData['bank_details'] ? json_encode($userData['bank_details'], true) : null;
 
         responseJson(['status' => 'success', 'data' => [
             'token' => $user['token'],
             'user' => $userData
-            ]
-        ]);
+        ]]);
     } catch (PDOException $e) {
         error_log("Lỗi lấy thông tin người dùng ID $user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
