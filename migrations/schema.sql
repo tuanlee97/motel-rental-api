@@ -146,16 +146,16 @@ CREATE TABLE IF NOT EXISTS utility_usage (
 
 -- Bảng maintenance_requests: Lưu yêu cầu bảo trì
 CREATE TABLE IF NOT EXISTS maintenance_requests (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT PRIMARY KEY AUTO_INCREMENT,
     room_id INT NOT NULL,
     description TEXT NOT NULL,
     status ENUM('pending', 'in_progress', 'completed') DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INT NOT NULL,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
-    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_maintenance_requests_room_status (room_id, status)
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME,
+    deleted_at DATETIME,
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Bảng notifications: Lưu thông báo
@@ -172,16 +172,23 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 -- Bảng tickets: Lưu yêu cầu hỗ trợ
 CREATE TABLE IF NOT EXISTS tickets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
+    room_id INT,
+    contract_id INT,
     subject VARCHAR(255) NOT NULL,
-    message TEXT NOT NULL,
-    status ENUM('open', 'closed', 'pending') DEFAULT 'open',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_tickets_status_date (status, created_at)
+    description TEXT NOT NULL,
+    priority ENUM('low', 'medium', 'high') DEFAULT 'medium',
+    status ENUM('open', 'in_progress', 'resolved', 'closed') DEFAULT 'open',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME,
+    resolved_at DATETIME,
+    deleted_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    FOREIGN KEY (contract_id) REFERENCES contracts(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 
 -- Bảng room_occupants: Lưu thông tin người ở trong phòng
 CREATE TABLE IF NOT EXISTS room_occupants (
@@ -205,10 +212,13 @@ CREATE TABLE IF NOT EXISTS employee_assignments (
     branch_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INT NOT NULL,
+    updated_at TIMESTAMP NULL DEFAULT NULL,
+    updated_by INT DEFAULT NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
     UNIQUE KEY unique_assignment (employee_id, branch_id),
     INDEX idx_employee_assignments_employee_id (employee_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -220,10 +230,13 @@ CREATE TABLE IF NOT EXISTS branch_customers (
     user_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INT NOT NULL,
+    updated_at TIMESTAMP NULL DEFAULT NULL,
+    updated_by INT DEFAULT NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
     UNIQUE KEY unique_branch_user (branch_id, user_id),
     INDEX idx_branch_customers_branch_id (branch_id),
     INDEX idx_branch_customers_user_id (user_id)

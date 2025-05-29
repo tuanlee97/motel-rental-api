@@ -104,10 +104,11 @@ INSERT INTO utility_usage (room_id, contract_id, service_id, month, usage_amount
 (4, 2, 5, '2025-02', 1, 0, 1, '2025-02-28 10:00:00'); -- Internet
 
 -- Thêm dữ liệu vào bảng maintenance_requests
-INSERT INTO maintenance_requests (room_id, description, status, created_at, created_by) VALUES
-(1, 'Sửa ống nước bị rò rỉ', 'pending', '2025-02-01 09:00:00', 8),
-(3, 'Kiểm tra hệ thống điện', 'in_progress', '2025-02-02 10:00:00', 4),
-(4, 'Sửa cửa sổ bị kẹt', 'completed', '2025-02-03 11:00:00', 11);
+INSERT INTO maintenance_requests (room_id, description, status, created_at, created_by)
+VALUES
+    (1, 'Sửa ống nước bị rò rỉ', 'pending', '2025-02-01 09:00:00', 8),
+    (3, 'Kiểm tra hệ thống điện', 'in_progress', '2025-02-02 10:00:00', 4),
+    (4, 'Sửa cửa sổ bị kẹt', 'completed', '2025-02-03 11:00:00', 11);
 
 -- Thêm dữ liệu vào bảng notifications
 INSERT INTO notifications (user_id, message, is_read, created_at) VALUES
@@ -116,9 +117,11 @@ INSERT INTO notifications (user_id, message, is_read, created_at) VALUES
 (2, 'Khách hàng mới đã được thêm vào chi nhánh.', FALSE, '2025-02-01 09:00:00');
 
 -- Thêm dữ liệu vào bảng tickets
-INSERT INTO tickets (user_id, subject, message, status, created_at) VALUES
-(8, 'Hỏi về hóa đơn', 'Hóa đơn tháng 2 có sai sót, vui lòng kiểm tra.', 'open', '2025-02-02 10:00:00'),
-(11, 'Yêu cầu hỗ trợ', 'Cần hỗ trợ về hợp đồng thuê.', 'pending', '2025-02-03 11:00:00');
+INSERT INTO tickets (user_id, room_id, contract_id, subject, description, priority, status, created_at)
+VALUES
+    (8, NULL, NULL, 'Hỏi về hóa đơn', 'Hóa đơn tháng 2 có sai sót, vui lòng kiểm tra.', 'medium', 'open', '2025-02-02 10:00:00'),
+    (11, NULL, NULL, 'Yêu cầu hỗ trợ', 'Cần hỗ trợ về hợp đồng thuê.', 'medium', 'pending', '2025-02-03 11:00:00');
+
 
 -- Thêm dữ liệu vào bảng room_occupants
 INSERT INTO room_occupants (room_id, user_id, relation, created_at, start_date, end_date) VALUES

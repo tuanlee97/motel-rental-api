@@ -8,7 +8,7 @@ function getBranches() {
     $user = verifyJWT();
     $user_id = $user['user_id'];
     $role = $user['role'];
-
+    error_log("User ID: $user_id, Role: $role", 0);
     // Phân trang
     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
