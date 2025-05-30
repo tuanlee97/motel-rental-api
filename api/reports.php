@@ -740,7 +740,7 @@ function getContractReport($branchId) {
     $query = "
         SELECT 
             c.id, c.room_id, c.user_id, c.start_date, c.end_date, c.status, c.created_at, c.deposit,
-            r.name AS room_name, u.username AS user_name
+            r.name AS room_name, u.name AS user_name
         FROM contracts c
         JOIN rooms r ON c.room_id = r.id
         JOIN users u ON c.user_id = u.id
@@ -848,13 +848,14 @@ function getUtilityUsageReport($branchId) {
         $stats_stmt = $pdo->prepare("
             SELECT 
                 s.type,
+                s.name,
                 SUM(u.usage_amount * s.price) AS total_cost,
                 SUM(u.usage_amount) AS total_usage
             FROM utility_usage u
             JOIN services s ON u.service_id = s.id
             JOIN rooms r ON u.room_id = r.id
             WHERE r.branch_id = ? AND u.deleted_at IS NULL
-            GROUP BY s.type
+            GROUP BY s.type, s.name
         ");
         $stats_stmt->execute([$branchId]);
         $stats = $stats_stmt->fetchAll(PDO::FETCH_ASSOC);

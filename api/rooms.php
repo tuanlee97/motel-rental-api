@@ -18,7 +18,12 @@ function getRooms() {
     $conditions = [];
     $params = [];
 
-    if (!empty($_GET['branch_id'])) {
+    if ($role === 'customer') {
+        // Lọc các phòng mà customer đang thuê (có contract active)
+        $conditions[] = "c.user_id = ?";
+        $params[] = $user_id;
+        $conditions[] = "c.status = 'active'";
+    } elseif (!empty($_GET['branch_id'])) {
         $branch_id = (int)$_GET['branch_id'];
         $conditions[] = "r.branch_id = ?";
         $params[] = $branch_id;
