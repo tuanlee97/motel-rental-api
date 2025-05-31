@@ -173,6 +173,7 @@ function getAllMaintenanceRequests() {
     $conditions = [];
     $params = [];
 
+    // Xác định branch
     if (!empty($_GET['branch_id'])) {
         $branch_id = (int)$_GET['branch_id'];
         $conditions[] = "r.branch_id = ?";
@@ -195,7 +196,7 @@ function getAllMaintenanceRequests() {
         }
     }
 
-    // Thêm điều kiện tìm kiếm nếu có search
+    // Tìm kiếm
     if (!empty($_GET['search'])) {
         $search = '%' . trim($_GET['search']) . '%';
         $conditions[] = "(mr.description LIKE ? OR r.name LIKE ? OR u.name LIKE ?)";
@@ -204,55 +205,66 @@ function getAllMaintenanceRequests() {
         $params[] = $search;
     }
 
+    // Trạng thái
     if (!empty($_GET['status'])) {
         $conditions[] = "mr.status = ?";
         $params[] = $_GET['status'];
     }
 
+    // Không lấy bản ghi đã xóa
     $conditions[] = "mr.deleted_at IS NULL";
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
 
+    // JOIN đầy đủ cho tất cả truy vấn
+    $baseJoin = "
+        FROM maintenance_requests mr
+        JOIN rooms r ON mr.room_id = r.id
+        JOIN users u ON mr.created_by = u.id
+        JOIN branches b ON r.branch_id = b.id
+    ";
+
+    // Truy vấn chính
     $query = "
         SELECT 
             mr.id, mr.room_id, mr.description, mr.status, mr.created_by, mr.created_at,
             r.name AS room_name, r.branch_id,
             u.name AS user_name, 
             b.name AS branch_name
-        FROM maintenance_requests mr
-        JOIN rooms r ON mr.room_id = r.id
-        JOIN users u ON mr.created_by = u.id
-        JOIN branches b ON r.branch_id = b.id
+        $baseJoin
         $whereClause
         LIMIT $limit OFFSET $offset
     ";
     error_log("Query: $query");
     error_log("Params: " . json_encode($params));
+
     try {
-        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM maintenance_requests mr JOIN rooms r ON mr.room_id = r.id JOIN branches b ON r.branch_id = b.id $whereClause");
+        // Truy vấn đếm
+        $countQuery = "SELECT COUNT(*) $baseJoin $whereClause";
+        $countStmt = $pdo->prepare($countQuery);
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
         $totalPages = ceil($totalRecords / $limit);
 
+        // Truy vấn dữ liệu
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Calculate statistics (e.g., count by status)
+        // Truy vấn thống kê
         $statsQuery = "
             SELECT 
                 COUNT(*) as total,
                 SUM(CASE WHEN mr.status = 'pending' THEN 1 ELSE 0 END) as pending,
                 SUM(CASE WHEN mr.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN mr.status = 'completed' THEN 1 ELSE 0 END) as completed
-            FROM maintenance_requests mr
-            JOIN rooms r ON mr.room_id = r.id
-            JOIN branches b ON r.branch_id = b.id
+            $baseJoin
             $whereClause
         ";
         $statsStmt = $pdo->prepare($statsQuery);
         $statsStmt->execute($params);
         $statistics = $statsStmt->fetch(PDO::FETCH_ASSOC);
 
+        // Phản hồi
         responseJson([
             'status' => 'success',
             'data' => [

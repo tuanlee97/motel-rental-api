@@ -4,92 +4,102 @@ require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
 
 // Customer: Create Ticket
-function createTicket($userId) {
+function createTicket() {
     $pdo = getDB();
     $user = verifyJWT();
     $current_user_id = $user['user_id'];
     $role = $user['role'];
 
-    if ($role !== 'customer' || $current_user_id !== (int)$userId) {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
+    // Ensure the user is a customer
+    if ($role !== 'customer') {
+        responseJson(['message' => 'Chỉ khách hàng mới có thể tạo ticket'], 403);
         return;
     }
 
-    $input = json_decode(file_get_contents('php://input'), true);
-    if (!isset($input['subject']) || !isset($input['description']) || !isset($input['room_id'])) {
-        responseJson(['status' => 'error', 'message' => 'Thiếu thông tin tiêu đề, mô tả hoặc phòng'], 400);
+    // Parse request body
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!$data) {
+        responseJson(['message' => 'Dữ liệu yêu cầu không hợp lệ'], 400);
         return;
     }
 
-    $subject = trim($input['subject']);
-    $description = trim($input['description']);
-    $room_id = (int)$input['room_id'];
-    $contract_id = isset($input['contract_id']) ? (int)$input['contract_id'] : null;
-    $priority = isset($input['priority']) && in_array($input['priority'], ['low', 'medium', 'high']) ? $input['priority'] : 'medium';
+    // Extract and validate required fields
+    $subject = isset($data['subject']) ? trim($data['subject']) : null;
+    $description = isset($data['description']) ? trim($data['description']) : null;
+    $room_id = isset($data['room_id']) ? (int)$data['room_id'] : null;
+    $priority = isset($data['priority']) ? trim($data['priority']) : 'medium';
+    $status = 'open'; // Default status for new tickets
 
-    if (empty($subject) || empty($description)) {
-        responseJson(['status' => 'error', 'message' => 'Tiêu đề và mô tả không được để trống'], 400);
+    if (!$subject || !$description) {
+        responseJson(['message' => 'Thiếu tiêu đề hoặc mô tả'], 400);
         return;
     }
 
-    try {
-        // Kiểm tra hợp đồng hoạt động
+    // Validate priority
+    $valid_priorities = ['low', 'medium', 'high'];
+    if (!in_array($priority, $valid_priorities)) {
+        responseJson(['message' => 'Mức độ ưu tiên không hợp lệ'], 400);
+        return;
+    }
+
+    // Validate room_id if provided
+    $contract_id = null;
+    if ($room_id) {
         $stmt = $pdo->prepare("
-            SELECT c.id 
-            FROM contracts c 
-            WHERE c.user_id = ? AND c.room_id = ? AND c.status = 'active' AND c.deleted_at IS NULL
+            SELECT id FROM contracts 
+            WHERE user_id = ? AND room_id = ? AND status = 'active' AND deleted_at IS NULL
+            LIMIT 1
         ");
-        $stmt->execute([$userId, $room_id]);
-        $contract = $stmt->fetch();
-        if (!$contract) {
-            responseJson(['status' => 'error', 'message' => 'Không có hợp đồng hoạt động với phòng này'], 403);
+        $stmt->execute([$current_user_id, $room_id]);
+        $contract_id = $stmt->fetchColumn();
+
+        if (!$contract_id) {
+            responseJson(['message' => 'Bạn không có quyền tạo ticket cho phòng này'], 403);
             return;
         }
-        $contract_id = $contract_id ?: $contract['id'];
-
-        // Tạo ticket
-        $query = "
-            INSERT INTO tickets (user_id, room_id, contract_id, subject, description, priority, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'open', NOW())
-        ";
-        $stmt = $pdo->prepare($query);
-        $stmt->execute([$userId, $room_id, $contract_id, $subject, $description, $priority]);
-
-        $ticket_id = $pdo->lastInsertId();
-
-        // Lấy thông tin ticket vừa tạo
-        $stmt = $pdo->prepare("
-            SELECT 
-                t.id, t.subject, t.description, t.priority, t.status, t.created_at,
-                r.name AS room_name, u.username AS user_name
-            FROM tickets t
-            JOIN rooms r ON t.room_id = r.id
-            JOIN users u ON t.user_id = u.id
-            WHERE t.id = ? AND t.deleted_at IS NULL
-        ");
-        $stmt->execute([$ticket_id]);
-        $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        responseJson([
-            'status' => 'success',
-            'data' => $ticket,
-            'message' => 'Ticket đã được tạo thành công'
-        ], 201);
-    } catch (PDOException $e) {
-        error_log("Lỗi tạo ticket: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
+
+    // Insert ticket into the database
+    $stmt = $pdo->prepare("
+        INSERT INTO tickets (user_id, room_id, contract_id, subject, description, priority, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+    ");
+    $stmt->execute([$current_user_id, $room_id, $contract_id, $subject, $description, $priority, $status]);
+
+    $ticket_id = $pdo->lastInsertId();
+
+    // Fetch the created ticket to return
+    $stmt = $pdo->prepare("
+        SELECT t.id, t.user_id, t.room_id, t.contract_id, t.subject, t.description, t.priority, t.status, t.created_at, 
+               r.name AS room_name, u.name AS user_name
+        FROM tickets t
+        LEFT JOIN rooms r ON t.room_id = r.id
+        JOIN users u ON t.user_id = u.id
+        WHERE t.id = ?
+    ");
+    $stmt->execute([$ticket_id]);
+    $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$ticket) {
+        responseJson(['message' => 'Không thể tìm thấy ticket vừa tạo'], 500);
+        return;
+    }
+
+    responseJson([
+        'status' => 'success',
+        'data' => $ticket
+    ], 201);
 }
 
-// Customer: Get Tickets
+// Get Tickets for a Customer
 function getCustomerTickets($userId) {
     $pdo = getDB();
     $user = verifyJWT();
     $current_user_id = $user['user_id'];
     $role = $user['role'];
 
-    if ($role !== 'customer' || $current_user_id !== (int)$userId) {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
+    if ($role !== 'customer' || $current_user_id != $userId) {
+        responseJson(['message' => 'Không có quyền truy cập'], 403);
         return;
     }
 
@@ -97,411 +107,321 @@ function getCustomerTickets($userId) {
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
 
-    $status = isset($_GET['status']) && in_array($_GET['status'], ['open', 'in_progress', 'resolved', 'closed']) ? $_GET['status'] : null;
-    $priority = isset($_GET['priority']) && in_array($_GET['priority'], ['low', 'medium', 'high']) ? $_GET['priority'] : null;
+    $conditions = ["t.user_id = ?"];
+    $params = [$current_user_id];
 
-    $conditions = ['t.user_id = ? AND t.deleted_at IS NULL'];
-    $params = [$userId];
-
-    if ($status) {
-        $conditions[] = 't.status = ?';
-        $params[] = $status;
-    }
-    if ($priority) {
-        $conditions[] = 't.priority = ?';
-        $params[] = $priority;
+    // Add search condition
+    if (!empty($_GET['search'])) {
+        $search = '%' . trim($_GET['search']) . '%';
+        $conditions[] = "(t.subject LIKE ? OR t.description LIKE ? OR r.name LIKE ?)";
+        $params[] = $search;
+        $params[] = $search;
+        $params[] = $search;
     }
 
-    $where_clause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
+    // Add status filter
+    if (!empty($_GET['status'])) {
+        $conditions[] = "t.status = ?";
+        $params[] = $_GET['status'];
+    }
+
+    // Add priority filter
+    if (!empty($_GET['priority'])) {
+        $conditions[] = "t.priority = ?";
+        $params[] = $_GET['priority'];
+    }
+
+    $conditions[] = "t.deleted_at IS NULL";
+    $whereClause = "WHERE " . implode(" AND ", $conditions);
 
     $query = "
         SELECT 
-            t.id, t.subject, t.description, t.priority, t.status, t.created_at,
-            r.name AS room_name
+            t.id, t.user_id, t.room_id, t.contract_id, t.subject, t.description, t.priority, t.status, t.created_at,
+            r.name AS room_name, u.name AS user_name
         FROM tickets t
-        JOIN rooms r ON t.room_id = r.id
-        $where_clause
-        ORDER BY t.created_at DESC
+        LEFT JOIN rooms r ON t.room_id = r.id
+        JOIN users u ON t.user_id = u.id
+        $whereClause
         LIMIT $limit OFFSET $offset
     ";
 
     try {
-        // Đếm tổng số bản ghi
-        $count_stmt = $pdo->prepare("SELECT COUNT(*) FROM tickets t $where_clause");
-        $count_stmt->execute($params);
-        $total_records = $count_stmt->fetchColumn();
-        $total_pages = ceil($total_records / $limit);
+        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM tickets t LEFT JOIN rooms r ON t.room_id = r.id JOIN users u ON t.user_id = u.id $whereClause");
+        $countStmt->execute($params);
+        $totalRecords = $countStmt->fetchColumn();
+        $totalPages = ceil($totalRecords / $limit);
 
-        // Lấy danh sách tickets
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $tickets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Fetch statistics
+        $statsQuery = "
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as open,
+                SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN t.status = 'resolved' THEN 1 ELSE 0 END) as resolved,
+                SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END) as closed
+            FROM tickets t
+            LEFT JOIN rooms r ON t.room_id = r.id
+            JOIN users u ON t.user_id = u.id
+            $whereClause
+        ";
+        $statsStmt = $pdo->prepare($statsQuery);
+        $statsStmt->execute($params);
+        $statistics = $statsStmt->fetch(PDO::FETCH_ASSOC);
+
         responseJson([
             'status' => 'success',
-            'data' => $tickets,
+            'data' => [
+                'tickets' => $tickets,
+                'statistics' => $statistics
+            ],
             'pagination' => [
                 'current_page' => $page,
                 'limit' => $limit,
-                'total_records' => $total_records,
-                'total_pages' => $total_pages,
-            ],
+                'total_records' => $totalRecords,
+                'total_pages' => $totalPages
+            ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy tickets: " . $e->getMessage());
+        error_log("Lỗi lấy danh sách ticket: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
 
-// Admin/Owner/Employee: Get All Tickets
+// Get All Tickets (Admin/Owner/Employee)
 function getAllTickets() {
     $pdo = getDB();
     $user = verifyJWT();
     $user_id = $user['user_id'];
     $role = $user['role'];
 
-    if (!in_array($role, ['admin', 'owner', 'employee'])) {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
-        return;
-    }
-
     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
 
-    $status = isset($_GET['status']) && in_array($_GET['status'], ['open', 'in_progress', 'resolved', 'closed']) ? $_GET['status'] : null;
-    $priority = isset($_GET['priority']) && in_array($_GET['priority'], ['low', 'medium', 'high']) ? $_GET['priority'] : null;
-    $branch_id = isset($_GET['branch_id']) && is_numeric($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
-
-    $conditions = ['t.deleted_at IS NULL'];
+    $conditions = [];
     $params = [];
 
-    if ($role === 'owner') {
-        $conditions[] = 'r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)';
-        $params[] = $user_id;
-    } elseif ($role === 'employee') {
-        $conditions[] = 'r.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)';
-        $params[] = $user_id;
-    }
-
-    if ($branch_id && ($role === 'admin' || ($role === 'owner' && verifyBranchOwnership($pdo, $user_id, $branch_id)) || ($role === 'employee' && verifyEmployeeAssignment($pdo, $user_id, $branch_id)))) {
-        $conditions[] = 'r.branch_id = ?';
+    // Filter by branch
+    if (!empty($_GET['branch_id'])) {
+        $branch_id = (int)$_GET['branch_id'];
+        $conditions[] = "r.branch_id = ?";
         $params[] = $branch_id;
+    } elseif ($role === 'owner') {
+        $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL LIMIT 1");
+        $stmt->execute([$user_id]);
+        $branch_id = $stmt->fetchColumn();
+        if ($branch_id) {
+            $conditions[] = "r.branch_id = ?";
+            $params[] = $branch_id;
+        }
+    } elseif ($role === 'employee') {
+        $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? LIMIT 1");
+        $stmt->execute([$user_id]);
+        $branch_id = $stmt->fetchColumn();
+        if ($branch_id) {
+            $conditions[] = "r.branch_id = ?";
+            $params[] = $branch_id;
+        }
     }
 
-    if ($status) {
-        $conditions[] = 't.status = ?';
-        $params[] = $status;
-    }
-    if ($priority) {
-        $conditions[] = 't.priority = ?';
-        $params[] = $priority;
+    // Add search condition
+    if (!empty($_GET['search'])) {
+        $search = '%' . trim($_GET['search']) . '%';
+        $conditions[] = "(t.subject LIKE ? OR t.description LIKE ? OR r.name LIKE ? OR u.name LIKE ?)";
+        $params[] = $search;
+        $params[] = $search;
+        $params[] = $search;
+        $params[] = $search;
     }
 
-    $where_clause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
+    // Add status filter
+    if (!empty($_GET['status'])) {
+        $conditions[] = "t.status = ?";
+        $params[] = $_GET['status'];
+    }
+
+    // Add priority filter
+    if (!empty($_GET['priority'])) {
+        $conditions[] = "t.priority = ?";
+        $params[] = $_GET['priority'];
+    }
+
+    $conditions[] = "t.deleted_at IS NULL";
+    $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
+
+    $baseJoin = "
+        FROM tickets t
+        LEFT JOIN rooms r ON t.room_id = r.id
+        JOIN users u ON t.user_id = u.id
+        LEFT JOIN branches b ON r.branch_id = b.id
+    ";
 
     $query = "
         SELECT 
-            t.id, t.subject, t.description, t.priority, t.status, t.created_at,
-            r.name AS room_name, u.username AS user_name, b.name AS branch_name
-        FROM tickets t
-        JOIN rooms r ON t.room_id = r.id
-        JOIN users u ON t.user_id = u.id
-        JOIN branches b ON r.branch_id = b.id
-        $where_clause
-        ORDER BY t.created_at DESC
+            t.id, t.user_id, t.room_id, t.contract_id, t.subject, t.description, t.priority, t.status, t.created_at,
+            r.name AS room_name, u.name AS user_name, b.name AS branch_name
+        $baseJoin
+        $whereClause
         LIMIT $limit OFFSET $offset
     ";
 
     try {
-        // Thống kê trạng thái
-        $stats_stmt = $pdo->prepare("
-            SELECT 
-                COUNT(*) AS total_tickets,
-                SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) AS open_tickets,
-                SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress_tickets,
-                SUM(CASE WHEN t.status = 'resolved' THEN 1 ELSE 0 END) AS resolved_tickets,
-                SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END) AS closed_tickets
-            FROM tickets t
-            JOIN rooms r ON t.room_id = r.id
-            $where_clause
-        ");
-        $stats_stmt->execute($params);
-        $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
+        $countQuery = "SELECT COUNT(*) $baseJoin $whereClause";
+        $countStmt = $pdo->prepare($countQuery);
+        $countStmt->execute($params);
+        $totalRecords = $countStmt->fetchColumn();
+        $totalPages = ceil($totalRecords / $limit);
 
-        // Đếm tổng số bản ghi
-        $count_stmt = $pdo->prepare("SELECT COUNT(*) FROM tickets t JOIN rooms r ON t.room_id = r.id $where_clause");
-        $count_stmt->execute($params);
-        $total_records = $count_stmt->fetchColumn();
-        $total_pages = ceil($total_records / $limit);
-
-        // Lấy danh sách tickets
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $tickets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        $statsQuery = "
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as open,
+                SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN t.status = 'resolved' THEN 1 ELSE 0 END) as resolved,
+                SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END) as closed
+            $baseJoin
+            $whereClause
+        ";
+        $statsStmt = $pdo->prepare($statsQuery);
+        $statsStmt->execute($params);
+        $statistics = $statsStmt->fetch(PDO::FETCH_ASSOC);
+
         responseJson([
             'status' => 'success',
             'data' => [
-                'statistics' => $stats,
                 'tickets' => $tickets,
+                'statistics' => $statistics
             ],
             'pagination' => [
                 'current_page' => $page,
                 'limit' => $limit,
-                'total_records' => $total_records,
-                'total_pages' => $total_pages,
-            ],
+                'total_records' => $totalRecords,
+                'total_pages' => $totalPages
+            ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách tickets: " . $e->getMessage());
+        error_log("Lỗi lấy danh sách ticket: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
 
-// Admin/Owner/Employee: Update Ticket
-function updateTicket($ticketId) {
+// Update Ticket (Admin/Owner/Employee)
+function updateTicket($id) {
     $pdo = getDB();
     $user = verifyJWT();
-    $user_id = $user['user_id'];
     $role = $user['role'];
 
-    if (!in_array($role, ['admin', 'owner', 'employee'])) {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!$data || !isset($data['status']) && !isset($data['priority'])) {
+        responseJson(['message' => 'Thiếu trạng thái hoặc mức độ ưu tiên để cập nhật'], 400);
         return;
     }
 
-    $input = json_decode(file_get_contents('php://input'), true);
-    $status = isset($input['status']) && in_array($input['status'], ['open', 'in_progress', 'resolved', 'closed']) ? $input['status'] : null;
-    $priority = isset($input['priority']) && in_array($input['priority'], ['low', 'medium', 'high']) ? $input['priority'] : null;
+    $status = isset($data['status']) ? trim($data['status']) : null;
+    $priority = isset($data['priority']) ? trim($data['priority']) : null;
 
-    if (!$status && !$priority) {
-        responseJson(['status' => 'error', 'message' => 'Cần cung cấp trạng thái hoặc mức độ ưu tiên'], 400);
+    $valid_statuses = ['open', 'in_progress', 'resolved', 'closed'];
+    $valid_priorities = ['low', 'medium', 'high'];
+
+    if ($status && !in_array($status, $valid_statuses)) {
+        responseJson(['message' => 'Trạng thái không hợp lệ'], 400);
         return;
     }
 
-    try {
-        // Kiểm tra quyền truy cập ticket
-        $query = "
-            SELECT t.id 
-            FROM tickets t
-            JOIN rooms r ON t.room_id = r.id
-            WHERE t.id = ? AND t.deleted_at IS NULL
-        ";
-        $params = [$ticketId];
+    if ($priority && !in_array($priority, $valid_priorities)) {
+        responseJson(['message' => 'Mức độ ưu tiên không hợp lệ'], 400);
+        return;
+    }
 
-        if ($role === 'owner') {
-            $query .= " AND r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
-            $params[] = $user_id;
-        } elseif ($role === 'employee') {
-            $query .= " AND r.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
-            $params[] = $user_id;
-        }
+    $stmt = $pdo->prepare("SELECT room_id FROM tickets WHERE id = ? AND deleted_at IS NULL");
+    $stmt->execute([$id]);
+    $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $stmt = $pdo->prepare($query);
-        $stmt->execute($params);
-        if (!$stmt->fetch()) {
-            responseJson(['status' => 'error', 'message' => 'Ticket không tồn tại hoặc không có quyền truy cập'], 404);
+    if (!$ticket) {
+        responseJson(['message' => 'Ticket không tồn tại'], 404);
+        return;
+    }
+
+    $room_id = $ticket['room_id'];
+    if ($room_id) {
+        $stmt = $pdo->prepare("SELECT branch_id FROM rooms WHERE id = ?");
+        $stmt->execute([$room_id]);
+        $branch_id = $stmt->fetchColumn();
+
+        if (!$branch_id) {
+            responseJson(['message' => 'Phòng không tồn tại'], 404);
             return;
         }
 
-        // Cập nhật ticket
-        $update_conditions = [];
-        $update_params = [];
-
-        if ($status) {
-            $update_conditions[] = 'status = ?';
-            $update_params[] = $status;
-            if ($status === 'resolved') {
-                $update_conditions[] = 'resolved_at = NOW()';
-            } elseif ($status !== 'resolved') {
-                $update_conditions[] = 'resolved_at = NULL';
+        if ($role === 'owner') {
+            $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ? AND owner_id = ? AND deleted_at IS NULL");
+            $stmt->execute([$branch_id, $user['user_id']]);
+            if (!$stmt->fetchColumn()) {
+                responseJson(['message' => 'Không có quyền cập nhật ticket này'], 403);
+                return;
+            }
+        } elseif ($role === 'employee') {
+            $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND branch_id = ?");
+            $stmt->execute([$user['user_id'], $branch_id]);
+            if (!$stmt->fetchColumn()) {
+                responseJson(['message' => 'Không có quyền cập nhật ticket này'], 403);
+                return;
             }
         }
-        if ($priority) {
-            $update_conditions[] = 'priority = ?';
-            $update_params[] = $priority;
-        }
-
-        $update_conditions[] = 'updated_at = NOW()';
-        $update_params[] = $ticketId;
-
-        $update_query = "UPDATE tickets SET " . implode(', ', $update_conditions) . " WHERE id = ?";
-        $stmt = $pdo->prepare($update_query);
-        $stmt->execute($update_params);
-
-        // Lấy ticket đã cập nhật
-        $stmt = $pdo->prepare("
-            SELECT 
-                t.id, t.subject, t.description, t.priority, t.status, t.created_at, t.resolved_at,
-                r.name AS room_name, u.username AS user_name
-            FROM tickets t
-            JOIN rooms r ON t.room_id = r.id
-            JOIN users u ON t.user_id = u.id
-            WHERE t.id = ? AND t.deleted_at IS NULL
-        ");
-        $stmt->execute([$ticketId]);
-        $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        responseJson([
-            'status' => 'success',
-            'data' => $ticket,
-            'message' => 'Ticket đã được cập nhật'
-        ]);
-    } catch (PDOException $e) {
-        error_log("Lỗi cập nhật ticket: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
+
+    $updateFields = [];
+    $params = [];
+
+    if ($status) {
+        $updateFields[] = "status = ?";
+        $params[] = $status;
+        if ($status === 'resolved' || $status === 'closed') {
+            $updateFields[] = "resolved_at = NOW()";
+        }
+    }
+
+    if ($priority) {
+        $updateFields[] = "priority = ?";
+        $params[] = $priority;
+    }
+
+    $updateFields[] = "updated_at = NOW()";
+    $params[] = $id;
+
+    $query = "UPDATE tickets SET " . implode(", ", $updateFields) . " WHERE id = ?";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute($params);
+
+    responseJson(['status' => 'success', 'message' => 'Cập nhật ticket thành công']);
 }
 
-// Admin: Delete Ticket
-function deleteTicket($ticketId) {
+// Delete Ticket (Admin only)
+function deleteTicket($id) {
     $pdo = getDB();
     $user = verifyJWT();
     $role = $user['role'];
 
     if ($role !== 'admin') {
-        responseJson(['status' => 'error', 'message' => 'Chỉ admin được phép xóa ticket'], 403);
+        responseJson(['message' => 'Chỉ admin mới có thể xóa ticket'], 403);
         return;
     }
 
-    try {
-        $stmt = $pdo->prepare("UPDATE tickets SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
-        $stmt->execute([$ticketId]);
+    $stmt = $pdo->prepare("UPDATE tickets SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
+    $stmt->execute([$id]);
 
-        if ($stmt->rowCount() === 0) {
-            responseJson(['status' => 'error', 'message' => 'Ticket không tồn tại'], 404);
-            return;
-        }
-
-        responseJson([
-            'status' => 'success',
-            'message' => 'Ticket đã được xóa'
-        ]);
-    } catch (PDOException $e) {
-        error_log("Lỗi xóa ticket: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
-    }
-}
-
-// Admin/Owner/Employee: Update Maintenance Request
-function updateMaintenanceRequest($requestId) {
-    $pdo = getDB();
-    $user = verifyJWT();
-    $user_id = $user['user_id'];
-    $role = $user['role'];
-
-    if (!in_array($role, ['admin', 'owner', 'employee'])) {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
+    if ($stmt->rowCount() === 0) {
+        responseJson(['message' => 'Ticket không tồn tại'], 404);
         return;
     }
 
-    $input = json_decode(file_get_contents('php://input'), true);
-    if (!isset($input['status']) || !in_array($input['status'], ['pending', 'in_progress', 'completed'])) {
-        responseJson(['status' => 'error', 'message' => 'Trạng thái không hợp lệ'], 400);
-        return;
-    }
-
-    $status = $input['status'];
-
-    try {
-        // Kiểm tra quyền truy cập yêu cầu bảo trì
-        $query = "
-            SELECT mr.id 
-            FROM maintenance_requests mr
-            JOIN rooms r ON mr.room_id = r.id
-            WHERE mr.id = ? AND mr.deleted_at IS NULL
-        ";
-        $params = [$requestId];
-
-        if ($role === 'owner') {
-            $query .= " AND r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
-            $params[] = $user_id;
-        } elseif ($role === 'employee') {
-            $query .= " AND r.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
-            $params[] = $user_id;
-        }
-
-        $stmt = $pdo->prepare($query);
-        $stmt->execute($params);
-        if (!$stmt->fetch()) {
-            responseJson(['status' => 'error', 'message' => 'Yêu cầu bảo trì không tồn tại hoặc không có quyền truy cập'], 404);
-            return;
-        }
-
-        // Cập nhật yêu cầu bảo trì
-        $stmt = $pdo->prepare("
-            UPDATE maintenance_requests 
-            SET status = ?, updated_at = NOW()
-            WHERE id = ? AND deleted_at IS NULL
-        ");
-        $stmt->execute([$status, $requestId]);
-
-        // Lấy yêu cầu đã cập nhật
-        $stmt = $pdo->prepare("
-            SELECT 
-                mr.id, mr.description, mr.status, mr.created_at, mr.updated_at,
-                r.name AS room_name, u.username AS created_by
-            FROM maintenance_requests mr
-            JOIN rooms r ON mr.room_id = r.id
-            JOIN users u ON mr.created_by = u.id
-            WHERE mr.id = ? AND mr.deleted_at IS NULL
-        ");
-        $stmt->execute([$requestId]);
-        $request = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        responseJson([
-            'status' => 'success',
-            'data' => $request,
-            'message' => 'Yêu cầu bảo trì đã được cập nhật'
-        ]);
-    } catch (PDOException $e) {
-        error_log("Lỗi cập nhật yêu cầu bảo trì: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
-    }
+    responseJson(['status' => 'success', 'message' => 'Xóa ticket thành công']);
 }
-
-// Admin: Delete Maintenance Request
-function deleteMaintenanceRequest($requestId) {
-    $pdo = getDB();
-    $user = verifyJWT();
-    $role = $user['role'];
-
-    if ($role !== 'admin') {
-        responseJson(['status' => 'error', 'message' => 'Chỉ admin được phép xóa yêu cầu bảo trì'], 403);
-        return;
-    }
-
-    try {
-        $stmt = $pdo->prepare("UPDATE maintenance_requests SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
-        $stmt->execute([$requestId]);
-
-        if ($stmt->rowCount() === 0) {
-            responseJson(['status' => 'error', 'message' => 'Yêu cầu bảo trì không tồn tại'], 404);
-            return;
-        }
-
-        responseJson([
-            'status' => 'success',
-            'message' => 'Yêu cầu bảo trì đã được xóa'
-        ]);
-    } catch (PDOException $e) {
-        error_log("Lỗi xóa yêu cầu bảo trì: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
-    }
-}
-
-// Hàm hỗ trợ: Kiểm tra quyền sở hữu chi nhánh
-function verifyBranchOwnership($pdo, $userId, $branchId) {
-    $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ? AND owner_id = ? AND deleted_at IS NULL");
-    $stmt->execute([$branchId, $userId]);
-    return $stmt->fetch() !== false;
-}
-
-// Hàm hỗ trợ: Kiểm tra phân công nhân viên
-function verifyEmployeeAssignment($pdo, $userId, $branchId) {
-    $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND branch_id = ?");
-    $stmt->execute([$userId, $branchId]);
-    return $stmt->fetch() !== false;
-}
-?>
