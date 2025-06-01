@@ -68,6 +68,16 @@ function handleApiRequest($method, $uri)
             "handler" => "registerGoogleUser",
             "middleware" => "non-auth",
         ],
+        "POST:users/forgot-password" => [
+            "file" => "../api/users.php",
+            "handler" => "forgotPassword",
+            "middleware" => "non-auth",
+        ],
+        "POST:users/reset-password" => [
+            "file" => "../api/users.php",
+            "handler" => "resetPassword",
+            "middleware" => "non-auth",
+        ],
         // QR code upload
         "POST:upload-qr" => [
             "file" => "../api/upload.php",
@@ -284,11 +294,7 @@ function handleApiRequest($method, $uri)
             "handler" => "getUtilityUsageSummary",
             "middleware" => "auth:admin,owner,employee,customer",
         ],
-        "POST:utility_usage/bulk" => [
-            "file" => "../api/utility_usage.php",
-            "handler" => "createBulkUtilityUsage",
-            "middleware" => "auth:owner,employee",
-        ],
+      
         // Maintenance Requests
         "POST:maintenance-requests" => [
             "file" => "../api/maintenance_requests.php",
@@ -631,11 +637,6 @@ function handleApiRequest($method, $uri)
             "handler" => "getCustomerMaintenanceRequests",
             "middleware" => "auth:customer",
         ],
-        // "POST:reports/customer/([0-9]+)/maintenance" => [
-        //     "file" => "../api/reports.php",
-        //     "handler" => "createCustomerMaintenanceRequest",
-        //     "middleware" => "auth:customer",
-        // ],
         "GET:reports/customer/([0-9]+)/invoices/([0-9]+)" => [
             "file" => "../api/reports.php",
             "handler" => "getCustomerInvoiceDetails",
@@ -650,6 +651,7 @@ function handleApiRequest($method, $uri)
     ];
 
     foreach ($routes as $route => $config) {
+
         list($routeMethod, $routePattern) = explode(":", $route);
         $pattern = "#^" . $routePattern . '$#';
         // Extract query string and match base path

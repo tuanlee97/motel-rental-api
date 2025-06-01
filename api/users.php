@@ -1,8 +1,18 @@
 <?php
+
 require_once __DIR__ . '/../core/database.php';
 require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/utils/common.php';
+
+// Yêu cầu file PHPMailer thủ công
+require_once __DIR__ . '/../vendor/phpmailer/src/PHPMailer.php';
+require_once __DIR__ . '/../vendor/phpmailer/src/Exception.php';
+require_once __DIR__ . '/../vendor/phpmailer/src/SMTP.php';
+
+// Sử dụng namespace của PHPMailer
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 function getUsers() {
     $pdo = getDB();
@@ -752,6 +762,149 @@ function getCurrentUser() {
     } catch (PDOException $e) {
         error_log("Lỗi lấy thông tin người dùng ID $user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+    }
+}
+// Hàm gửi email
+function sendResetPasswordEmail($email, $resetLink) {
+    $mail = new PHPMailer(true);
+    $mail->CharSet = 'utf-8';
+    // Tải cấu hình từ app.php
+    $appConfig = require __DIR__ . '/../config/app.php';
+    try {
+        // Kiểm tra cấu hình SMTP
+        if (!isset($appConfig['SMTP_HOST']) || !isset($appConfig['SMTP_USERNAME']) || !isset($appConfig['SMTP_PASSWORD'])) {
+            error_log("Cấu hình SMTP không đầy đủ");
+            return false;
+        }
+
+        $mail->isSMTP();
+        $mail->Host = $appConfig['SMTP_HOST'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $appConfig['SMTP_USERNAME'];
+        $mail->Password = $appConfig['SMTP_PASSWORD'];
+        $mail->SMTPSecure = $appConfig['SMTP_ENCRYPTION'] ?? 'tls';
+        $mail->Port = $appConfig['SMTP_PORT'] ?? 587;
+
+        // Thiết lập thông tin email
+        $mail->setFrom($appConfig['SMTP_FROM_EMAIL'] ?? '', $appConfig['SMTP_FROM_NAME'] ?? 'System');
+        $mail->addAddress($email);
+        $mail->isHTML(true);
+        $mail->Subject = 'Yêu cầu đặt lại mật khẩu';
+        $mail->Body = "
+            <h2>Yêu cầu đặt lại mật khẩu</h2>
+            <p>Chào bạn,</p>
+            <p>Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Vui lòng nhấn vào liên kết dưới đây để đặt lại mật khẩu:</p>
+            <p><a href='$resetLink'>Đặt lại mật khẩu</a></p>
+            <p>Liên kết này sẽ hết hạn sau 1 giờ. Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
+            <p>Trân trọng,<br>" . ($appConfig['SMTP_FROM_NAME'] ?? 'System Team') . "</p>
+        ";
+        $mail->AltBody = "Nhấn vào liên kết sau để đặt lại mật khẩu của bạn: $resetLink\nLiên kết này sẽ hết hạn sau 1 giờ.";
+
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        error_log("Lỗi gửi email: {$mail->ErrorInfo}");
+        return false;
+    }
+}
+
+// Hàm xử lý yêu cầu quên mật khẩu
+function forgotPassword() {
+    $pdo = getDB();
+    // Tải cấu hình từ app.php
+    $appConfig = require __DIR__ . '/../config/app.php';
+
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!isset($input['email']) || !filter_var($input['email'], FILTER_VALIDATE_EMAIL)) {
+        responseJson(['status' => 'error', 'message' => 'Email không hợp lệ'], 400);
+        return;
+    }
+
+    $email = trim($input['email']);
+
+    try {
+        $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? AND deleted_at IS NULL");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            responseJson(['status' => 'error', 'message' => 'Email không tồn tại trong hệ thống'], 404);
+            return;
+        }
+
+        $token = bin2hex(random_bytes(32));
+        $expires_at = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+        $stmt = $pdo->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)");
+        $stmt->execute([$email, $token, $expires_at]);
+
+        if (!is_array($appConfig) || !isset($appConfig['FRONTEND_URL'])) {
+            error_log("Lỗi: Không tìm thấy FRONTEND_URL trong appConfig");
+            responseJson(['status' => 'error', 'message' => 'Lỗi cấu hình hệ thống'], 500);
+            return;
+        }
+
+        $resetLink = $appConfig['FRONTEND_URL'] . "/reset-password?email=" . urlencode($email) . "&token=" . urlencode($token);
+
+        if (!sendResetPasswordEmail($email, $resetLink, $appConfig)) {
+            responseJson(['status' => 'error', 'message' => 'Không thể gửi email đặt lại mật khẩu'], 500);
+            return;
+        }
+
+        responseJson(['status' => 'success', 'message' => 'Liên kết đặt lại mật khẩu đã được gửi đến email của bạn'], 200);
+    } catch (PDOException $e) {
+        error_log("Lỗi xử lý yêu cầu quên mật khẩu: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+    } catch (Exception $e) {
+        error_log("Lỗi xử lý yêu cầu quên mật khẩu: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi hệ thống'], 500);
+    }
+}
+
+// Hàm xử lý đặt lại mật khẩu
+function resetPassword() {
+    $pdo = getDB();
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!isset($input['email']) || !isset($input['token']) || !isset($input['password'])) {
+        responseJson(['status' => 'error', 'message' => 'Thiếu email, token hoặc mật khẩu'], 400);
+        return;
+    }
+
+    $email = trim($input['email']);
+    $token = trim($input['token']);
+    $password = trim($input['password']);
+
+    if (strlen($password) < 8) {
+        responseJson(['status' => 'error', 'message' => 'Mật khẩu phải có ít nhất 8 ký tự'], 400);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM password_resets WHERE email = ? AND token = ? AND expires_at > NOW()");
+        $stmt->execute([$email, $token]);
+        $reset = $stmt->fetch();
+
+        if (!$reset) {
+            responseJson(['status' => 'error', 'message' => 'Token không hợp lệ hoặc đã hết hạn'], 400);
+            return;
+        }
+
+        $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
+        $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE email = ? AND deleted_at IS NULL");
+        $stmt->execute([$hashedPassword, $email]);
+
+        $stmt = $pdo->prepare("DELETE FROM password_resets WHERE email = ? AND token = ?");
+        $stmt->execute([$email, $token]);
+
+        responseJson(['status' => 'success', 'message' => 'Mật khẩu đã được đặt lại thành công'], 200);
+    } catch (PDOException $e) {
+        error_log("Lỗi đặt lại mật khẩu: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+    } catch (Exception $e) {
+        error_log("Lỗi đặt lại mật khẩu: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi hệ thống'], 500);
     }
 }
 ?>
