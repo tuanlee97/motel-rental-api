@@ -38,9 +38,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($username) || empty($email) || empty($password)) {
             throw new Exception('Vui lòng nhập đầy đủ thông tin.');
         }
+
+        if (strlen($username) < 5) {
+            throw new Exception('Tên người dùng phải có ít nhất 5 ký tự.');
+        }
+           
+        if (strlen($password) < 6) {
+            throw new Exception('Mật khẩu phải có ít nhất 6 ký tự.');
+        }
+
         if ($password !== $confirmPassword) {
             throw new Exception('Mật khẩu xác nhận không khớp.');
         }
+        
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new Exception('Email không hợp lệ.');
         }
@@ -100,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
             <form method="POST" class="space-y-4" id="installForm" onsubmit="return validateForm(event)">
                 <div>
-                    <label for="username" class="block text-sm font-medium text-gray-700">Tên người dùng</label>
+                    <label for="username" class="block text-sm font-medium text-gray-700">Tên người dùng <small class="text-gray-500 text-xs">(ít nhất 5 ký tự)</small></label>
                     <input 
                         type="text" 
                         name="username" 
@@ -122,7 +132,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <p id="email_error" class="text-red-700 text-xs mt-1 hidden">Vui lòng nhập email hợp lệ.</p>
                 </div>
                 <div>
-                    <label for="password" class="block text-sm font-medium text-gray-700">Mật khẩu</label>
+                    <label for="password" class="block text-sm font-medium text-gray-700">Mật khẩu <small class="text-gray-500 text-xs">(ít nhất 6 ký tự)</small></label>
+                  
                     <input 
                         type="password" 
                         name="password" 
@@ -168,7 +179,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById('username_error').classList.remove('hidden');
                 isValid = false;
             }
-
+             if (!username || username.length < 5) {
+                document.getElementById('username_error').textContent = 'Tên người dùng phải có ít nhất 5 ký tự.';
+                document.getElementById('username_error').classList.remove('hidden');
+                isValid = false;
+            }
             // Validate email
             const email = document.getElementById('email').value.trim();
             if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -182,7 +197,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById('password_error').classList.remove('hidden');
                 isValid = false;
             }
-
+            if (!password || password.length < 6) {
+                document.getElementById('password_error').textContent = 'Mật khẩu phải có ít nhất 6 ký tự.';
+                document.getElementById('password_error').classList.remove('hidden');
+                isValid = false;
+            }
             // Validate confirm password
             const confirmPassword = document.getElementById('confirm_password').value.trim();
             if (confirmPassword !== password) {

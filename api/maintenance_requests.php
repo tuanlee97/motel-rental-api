@@ -234,8 +234,6 @@ function getAllMaintenanceRequests() {
         $whereClause
         LIMIT $limit OFFSET $offset
     ";
-    error_log("Query: $query");
-    error_log("Params: " . json_encode($params));
 
     try {
         // Truy vấn đếm

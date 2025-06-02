@@ -26,11 +26,16 @@ function getBranches() {
         // Khách hàng chỉ xem chi nhánh của hợp đồng active
         $conditions[] = "b.id IN (SELECT branch_id FROM contracts WHERE user_id = ? AND status = 'active' AND deleted_at IS NULL)";
         $params[] = $user_id;
-    } elseif ($role === 'admin' && !empty($_GET['branch_id'])) {
-        // Admin có thể lọc theo branch_id
-        $branch_id = (int)$_GET['branch_id'];
-        $conditions[] = "b.id = ?";
-        $params[] = $branch_id;
+    } elseif ($role === 'admin') {
+        // Admin có thể xem tất cả chi nhánh, không cần branch_id
+        if (!empty($_GET['branch_id'])) {
+            // Nếu có branch_id, lọc theo chi nhánh cụ thể
+            $branch_id = (int)$_GET['branch_id'];
+            $conditions[] = "b.id = ?";
+            $params[] = $branch_id;
+        }
+        // Không thêm điều kiện nếu không có branch_id
+       
     } elseif ($role === 'owner') {
         $conditions[] = "b.owner_id = ?";
         $params[] = $user_id;

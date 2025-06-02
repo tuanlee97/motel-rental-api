@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     phone VARCHAR(15),
+    dob DATE,
     role ENUM('admin', 'owner', 'employee', 'customer') DEFAULT 'customer',
     status ENUM('active', 'inactive', 'suspended') DEFAULT 'inactive',
     provider ENUM('email', 'google') DEFAULT 'email',

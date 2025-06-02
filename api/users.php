@@ -741,7 +741,7 @@ function getCurrentUser() {
 
     try {
         $stmt = $pdo->prepare("
-            SELECT id, username, name, email, phone, role, status, bank_details, qr_code_url
+            SELECT id, username, name, email, phone, dob, role, status, bank_details, qr_code_url
             FROM users
             WHERE id = ? AND deleted_at IS NULL
         ");
