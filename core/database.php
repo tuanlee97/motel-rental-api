@@ -5,7 +5,7 @@ function getDB() {
         $config = require __DIR__ . '/../config/database.php';
 
         $pdo = new PDO(
-            "mysql:host={$config['host']};dbname={$config['name']};charset=utf8mb4",
+            "mysql:host={$config['host']};port={$config['port']};dbname={$config['name']};charset=utf8mb4",
             $config['user'],
             $config['pass'],
             [

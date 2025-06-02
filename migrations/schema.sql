@@ -270,7 +270,6 @@ CREATE TABLE IF NOT EXISTS logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Stored Procedure để tự động kết thúc hợp đồng
-DELIMITER //
 
 CREATE PROCEDURE AutoEndContracts()
 BEGIN
@@ -449,13 +448,10 @@ BEGIN
 
     CLOSE contract_cursor;
     COMMIT;
-END //
+END;
 
-DELIMITER ;
 
--- Event để tự động chạy Stored Procedure hàng ngày
 SET GLOBAL event_scheduler = ON;
-DELIMITER //
 
 CREATE EVENT auto_end_contracts_event
 ON SCHEDULE EVERY 1 DAY
@@ -463,6 +459,4 @@ STARTS CURRENT_TIMESTAMP
 DO
 BEGIN
     CALL AutoEndContracts();
-END //
-
-DELIMITER ;
+END;

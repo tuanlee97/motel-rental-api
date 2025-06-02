@@ -37,11 +37,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dbName = $_POST['db_name'] ?? '';
         $dbUser = $_POST['db_user'] ?? '';
         $dbPass = $_POST['db_pass'] ?? '';
-
+        $dbPort = $_POST['db_port'] ?? '3306';
         // Lưu thông tin database vào session
         session_start();
         $_SESSION['db_config'] = [
             'host' => $dbHost,
+            'port' => $dbPort,
             'name' => $dbName,
             'user' => $dbUser,
             'pass' => $dbPass
@@ -97,6 +98,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                     >
                     <p id="db_host_error" class="text-red-700 text-xs mt-1 hidden">Vui lòng nhập Database Host.</p>
+                </div>
+                <div>
+                    <label for="db_port" class="block text-sm font-medium text-gray-700">Database Port</label>
+                    <input 
+                        type="number" 
+                        name="db_port" 
+                        id="db_port" 
+                        value="3306" 
+                        required 
+                        class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                    >
+                    <p id="db_port_error" class="text-red-700 text-xs mt-1 hidden">Vui lòng nhập Database Port.</p>
                 </div>
                 <div>
                     <label for="db_name" class="block text-sm font-medium text-gray-700">Database Name</label>
@@ -168,11 +181,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById('db_user_error').classList.remove('hidden');
                 isValid = false;
             }
+            // Validate db_port
+            const dbPort = document.getElementById('db_port').value.trim();
+            if (!dbPort || isNaN(dbPort)) {
+                document.getElementById('db_port_error').classList.remove('hidden');
+                isValid = false;
+            }
 
             // If all validations pass, submit the form
             if (isValid) {
                 document.getElementById('installForm').submit();
             }
+
+
 
             return isValid;
         }

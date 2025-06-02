@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Kết nối database
         $pdo = new PDO(
-            "mysql:host={$dbConfig['host']};dbname={$dbConfig['name']}",
+            "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['name']}",
             $dbConfig['user'],
             $dbConfig['pass']
         );

@@ -55,7 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'host' => $dbConfig['host'],
             'name' => $dbConfig['name'],
             'user' => $dbConfig['user'],
-            'pass' => $dbConfig['pass']
+            'pass' => $dbConfig['pass'],
+            'port' => $dbConfig['port'] ?? '3306',
         ], true) . ";\n?>";
         $result = file_put_contents('../config/database.php', $dbConfigContent);
         if ($result === false) {
