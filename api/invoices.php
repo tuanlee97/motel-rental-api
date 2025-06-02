@@ -4,7 +4,7 @@ require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/utils/common.php';
 
-// Lấy danh sách hóa đơn (GET /invoices)
+// Lấy danh sách hóa đơn
 function getInvoices() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -16,8 +16,6 @@ function getInvoices() {
         return;
     }
 
-    $branch_id = isset($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
-    $month = isset($_GET['month']) ? $_GET['month'] : null;
     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
@@ -25,73 +23,77 @@ function getInvoices() {
     $conditions = ['i.deleted_at IS NULL'];
     $params = [];
 
-    if ($branch_id) {
-        $conditions[] = 'i.branch_id = :branch_id';
-        $params['branch_id'] = $branch_id;
+    if ($role === 'customer') {
+        // Khách hàng chỉ xem hóa đơn của hợp đồng của họ
+        $conditions[] = "i.contract_id IN (SELECT id FROM contracts WHERE user_id = ?)";
+        $params[] = $user_id;
+    } elseif ($role === 'admin' && !empty($_GET['branch_id'])) {
+        // Admin có thể lọc theo branch_id
+        $branch_id = (int)$_GET['branch_id'];
+        $conditions[] = "i.branch_id = ?";
+        $params[] = $branch_id;
+    } elseif ($role === 'owner') {
+        $conditions[] = "i.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+        $params[] = $user_id;
+    } elseif ($role === 'employee') {
+        $conditions[] = "i.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
+        $params[] = $user_id;
     }
 
-    if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
-        $conditions[] = "DATE_FORMAT(i.due_date, '%Y-%m') = :month";
-        $params['month'] = $month;
+    if (!empty($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month'])) {
+        $conditions[] = "DATE_FORMAT(i.due_date, '%Y-%m') = ?";
+        $params[] = $_GET['month'];
     }
 
-    if ($role === 'owner' || $role === 'employee') {
-        $conditions[] = 'i.branch_id IN (
-            SELECT id FROM branches WHERE owner_id = :owner_id OR id IN (
-                SELECT branch_id FROM employee_assignments WHERE employee_id = :employee_id
-            )
-        )';
-        $params['owner_id'] = $user_id;
-        $params['employee_id'] = $user_id;
-    } elseif ($role === 'customer') {
-        $conditions[] = 'i.contract_id IN (
-            SELECT id FROM contracts WHERE user_id = :customer_id
-        )';
-        $params['customer_id'] = $user_id;
+    if (!empty($_GET['status'])) {
+        $conditions[] = "i.status = ?";
+        $params[] = $_GET['status'];
     }
 
-    $where_clause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
-
+    $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
-        SELECT i.id, i.contract_id, i.branch_id, i.amount, i.due_date, i.status, i.created_at,
-               c.room_id, r.name AS room_name, b.name AS branch_name, p.payment_date,
-               u.phone AS owner_phone, u.qr_code_url, u.bank_details
+        SELECT 
+            i.id, 
+            i.contract_id, 
+            i.branch_id, 
+            i.amount, 
+            i.due_date, 
+            i.status, 
+            i.created_at,
+            c.room_id, 
+            r.name AS room_name, 
+            b.name AS branch_name, 
+            p.payment_date,
+            u.phone AS owner_phone, 
+            u.qr_code_url, 
+            u.bank_details
         FROM invoices i
         JOIN contracts c ON i.contract_id = c.id
         JOIN rooms r ON c.room_id = r.id
         JOIN branches b ON i.branch_id = b.id
-        LEFT JOIN payments p ON i.contract_id = p.contract_id AND i.due_date = p.due_date
+        LEFT JOIN payments p ON i.contract_id = p.contract_id AND i.due_date = p.due_date AND p.deleted_at IS NULL
         JOIN users u ON b.owner_id = u.id
-        $where_clause
+        $whereClause
         ORDER BY i.created_at DESC
-        LIMIT :limit OFFSET :offset
+        LIMIT $limit OFFSET $offset
     ";
 
     try {
-        $count_query = "
+        $countStmt = $pdo->prepare("
             SELECT COUNT(*) 
             FROM invoices i
             JOIN contracts c ON i.contract_id = c.id
             JOIN rooms r ON c.room_id = r.id
             JOIN branches b ON i.branch_id = b.id
             JOIN users u ON b.owner_id = u.id
-            $where_clause
-        ";
-        $count_stmt = $pdo->prepare($count_query);
-        foreach ($params as $key => $value) {
-            $count_stmt->bindValue(":$key", $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
-        }
-        $count_stmt->execute();
-        $total_records = $count_stmt->fetchColumn();
-        $total_pages = ceil($total_records / $limit);
+            $whereClause
+        ");
+        $countStmt->execute($params);
+        $totalRecords = $countStmt->fetchColumn();
+        $totalPages = ceil($totalRecords / $limit);
 
         $stmt = $pdo->prepare($query);
-        foreach ($params as $key => $value) {
-            $stmt->bindValue(":$key", $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
-        }
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-        $stmt->execute();
+        $stmt->execute($params);
         $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($invoices as &$invoice) {
@@ -104,8 +106,8 @@ function getInvoices() {
             'pagination' => [
                 'current_page' => $page,
                 'limit' => $limit,
-                'total_records' => $total_records,
-                'total_pages' => $total_pages
+                'total_records' => $totalRecords,
+                'total_pages' => $totalPages
             ]
         ]);
     } catch (PDOException $e) {

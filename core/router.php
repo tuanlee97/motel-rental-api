@@ -88,7 +88,7 @@ function handleApiRequest($method, $uri)
         "GET:branches" => [
             "file" => "../api/branches.php",
             "handler" => "getBranches",
-            "middleware" => "auth:admin,owner",
+            "middleware" => null,
         ],
         "POST:branches" => [
             "file" => "../api/branches.php",

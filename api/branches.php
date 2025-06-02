@@ -3,47 +3,51 @@ require_once __DIR__ . '/../core/database.php';
 require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/utils/common.php';
+// Lấy danh sách chi nhánh
+// Lấy danh sách chi nhánh
 function getBranches() {
     $pdo = getDB();
     $user = verifyJWT();
     $user_id = $user['user_id'];
     $role = $user['role'];
     error_log("User ID: $user_id, Role: $role", 0);
+
     // Phân trang
     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
 
     // Điều kiện lọc
-    $conditions = [];
+    $conditions = ['b.deleted_at IS NULL', 'u.deleted_at IS NULL']; // Fixed typo here
     $params = [];
 
-    // Tìm kiếm theo tên chi nhánh
-    if (!empty($_GET['name'])) {
-        $name = sanitizeInput($_GET['name']);
-        $conditions[] = "b.name LIKE ?";
-        $params[] = "%$name%";
-    }
-
-    // Tìm kiếm theo địa chỉ
-    if (!empty($_GET['address'])) {
-        $address = sanitizeInput($_GET['address']);
-        $conditions[] = "b.address LIKE ?";
-        $params[] = "%$address%";
-    }
-
     // Phân quyền
-    if ($role === 'admin') {
-        // Admin thấy tất cả chi nhánh
+    if ($role === 'customer') {
+        // Khách hàng chỉ xem chi nhánh của hợp đồng active
+        $conditions[] = "b.id IN (SELECT branch_id FROM contracts WHERE user_id = ? AND status = 'active' AND deleted_at IS NULL)";
+        $params[] = $user_id;
+    } elseif ($role === 'admin' && !empty($_GET['branch_id'])) {
+        // Admin có thể lọc theo branch_id
+        $branch_id = (int)$_GET['branch_id'];
+        $conditions[] = "b.id = ?";
+        $params[] = $branch_id;
     } elseif ($role === 'owner') {
         $conditions[] = "b.owner_id = ?";
         $params[] = $user_id;
     } elseif ($role === 'employee') {
-        $conditions[] = "b.id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
+        $conditions[] = "b.id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
         $params[] = $user_id;
     } else {
-        responseJson(['message' => 'Không có quyền truy cập danh sách chi nhánh'], 403);
+        responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập danh sách chi nhánh'], 403);
         return;
+    }
+
+    // Tìm kiếm theo tên chi nhánh hoặc địa chỉ
+    if (!empty($_GET['search'])) {
+        $search = '%' . sanitizeInput($_GET['search']) . '%';
+        $conditions[] = "(b.name LIKE ? OR b.address LIKE ?)";
+        $params[] = $search;
+        $params[] = $search;
     }
 
     // Xây dựng truy vấn
@@ -71,31 +75,29 @@ function getBranches() {
         // Lấy danh sách dịch vụ cho mỗi chi nhánh
         foreach ($branches as &$branch) {
             $stmt = $pdo->prepare("
-                SELECT id AS service_id, name, price, unit
+                SELECT id AS service_id, name, price, unit, type
                 FROM services
-                WHERE branch_id = ?
+                WHERE branch_id = ? AND deleted_at IS NULL
             ");
             $stmt->execute([$branch['id']]);
             $branch['services'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
+
+        responseJson([
+            'status' => 'success',
+            'data' => $branches,
+            'pagination' => [
+                'current_page' => $page,
+                'limit' => $limit,
+                'total_records' => $totalRecords,
+                'total_pages' => $totalPages
+            ]
+        ]);
     } catch (PDOException $e) {
-        logError("Lỗi cơ sở dữ liệu khi lấy danh sách chi nhánh: " . $e->getMessage());
-        responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
-        return;
+        error_log("Lỗi lấy danh sách chi nhánh: " . $e->getMessage());
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
-
-    responseJson([
-        'data' => $branches,
-        'message' => 'Lấy danh sách chi nhánh thành công',
-        'pagination' => [
-            'current_page' => $page,
-            'limit' => $limit,
-            'total_records' => $totalRecords,
-            'total_pages' => $totalPages
-        ]
-    ]);
 }
-
 function getBranchById() {
     $pdo = getDB();
     $user = verifyJWT();

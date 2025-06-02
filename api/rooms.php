@@ -19,11 +19,12 @@ function getRooms() {
     $params = [];
 
     if ($role === 'customer') {
-        // Lọc các phòng mà customer đang thuê (có contract active)
+        // Khách hàng chỉ xem phòng của hợp đồng active
         $conditions[] = "c.user_id = ?";
         $params[] = $user_id;
         $conditions[] = "c.status = 'active'";
-    } elseif (!empty($_GET['branch_id'])) {
+    } elseif ($role === 'admin' && !empty($_GET['branch_id'])) {
+        // Admin có thể lọc theo branch_id
         $branch_id = (int)$_GET['branch_id'];
         $conditions[] = "r.branch_id = ?";
         $params[] = $branch_id;
@@ -36,7 +37,7 @@ function getRooms() {
             $params[] = $branch_id;
         }
     } elseif ($role === 'employee') {
-        $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL LIMIT 1");
         $stmt->execute([$user_id]);
         $branch_id = $stmt->fetchColumn();
         if ($branch_id) {
@@ -55,11 +56,20 @@ function getRooms() {
         $params[] = $_GET['status'];
     }
 
+    if (!empty($_GET['search'])) {
+        $conditions[] = "(r.name LIKE ? OR rt.name LIKE ? OR b.name LIKE ?)";
+        $search = '%' . $_GET['search'] . '%';
+        $params[] = $search;
+        $params[] = $search;
+        $params[] = $search;
+    }
+
     $conditions[] = "r.deleted_at IS NULL";
     $conditions[] = "rt.deleted_at IS NULL";
     $conditions[] = "b.deleted_at IS NULL";
 
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
+    $joinType = ($role === 'customer') ? "INNER JOIN" : "LEFT JOIN";
     $query = "
         SELECT 
             r.id, 
@@ -69,21 +79,26 @@ function getRooms() {
             r.price, 
             r.status, 
             r.created_at,
-            r.deleted_at, 
             rt.name AS type_name, 
             b.name AS branch_name,
             c.id AS contract_id
         FROM rooms r
         JOIN room_types rt ON r.type_id = rt.id
         JOIN branches b ON r.branch_id = b.id
-        LEFT JOIN contracts c ON r.id = c.room_id AND c.status IN ('active') 
-        AND c.deleted_at IS NULL
+        $joinType contracts c ON r.id = c.room_id AND c.status = 'active' AND c.deleted_at IS NULL
         $whereClause
         LIMIT $limit OFFSET $offset
     ";
 
     try {
-        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM rooms r JOIN room_types rt ON r.type_id = rt.id JOIN branches b ON r.branch_id = b.id LEFT JOIN contracts c ON r.id = c.room_id $whereClause");
+        $countStmt = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM rooms r 
+            JOIN room_types rt ON r.type_id = rt.id 
+            JOIN branches b ON r.branch_id = b.id 
+            $joinType contracts c ON r.id = c.room_id AND c.status = 'active' AND c.deleted_at IS NULL 
+            $whereClause
+        ");
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
         $totalPages = ceil($totalRecords / $limit);
@@ -107,7 +122,6 @@ function getRooms() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
 // Tạo phòng
 function createRoom() {
     $pdo = getDB();

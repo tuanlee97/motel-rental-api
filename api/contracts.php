@@ -18,11 +18,11 @@ function getContracts() {
     $conditions = [];
     $params = [];
 
-    // Xử lý branch_id
-    if (!empty($_GET['branch_id'])) {
-        $branch_id = (int)$_GET['branch_id'];
-        $conditions[] = "c.branch_id = ?";
-        $params[] = $branch_id;
+    // Xử lý quyền truy cập dựa trên vai trò
+    if ($role === 'customer') {
+        // Khách hàng chỉ xem được hợp đồng của chính họ
+        $conditions[] = "c.user_id = ?";
+        $params[] = $user_id;
     } elseif ($role === 'owner') {
         $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? LIMIT 1");
         $stmt->execute([$user_id]);
@@ -39,11 +39,17 @@ function getContracts() {
             $conditions[] = "c.branch_id = ?";
             $params[] = $branch_id;
         }
-    } else {
-        if ($role !== 'admin') {
-            $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
-            $params[] = $user_id;
-        }
+    } elseif ($role !== 'admin') {
+        // Các vai trò khác (ngoại trừ admin) chỉ xem hợp đồng của chi nhánh thuộc sở hữu
+        $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
+        $params[] = $user_id;
+    }
+
+    // Xử lý branch_id từ query string (chỉ áp dụng cho admin hoặc khi cần lọc cụ thể)
+    if (!empty($_GET['branch_id']) && $role === 'admin') {
+        $branch_id = (int)$_GET['branch_id'];
+        $conditions[] = "c.branch_id = ?";
+        $params[] = $branch_id;
     }
 
     if (!empty($_GET['status'])) {
@@ -58,7 +64,8 @@ function getContracts() {
         $params[] = $search;
         $params[] = $search;
     }
-     $conditions[] = "c.deleted_at IS NULL";
+
+    $conditions[] = "c.deleted_at IS NULL";
 
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
