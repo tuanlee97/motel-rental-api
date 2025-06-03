@@ -582,7 +582,7 @@ function patchUser() {
         $params[] = $target_user_id;
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
-
+      
         $username = $input['username'] ?? 'người dùng';
         createNotification($pdo, $target_user_id, "Thông tin tài khoản $username đã được cập nhật.");
         responseJson(['status' => 'success', 'message' => 'Cập nhật thông tin thành công']);
