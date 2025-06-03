@@ -169,10 +169,12 @@ function createUser() {
     $input = json_decode(file_get_contents('php://input'), true);
     validateRequiredFields($input, ['username', 'email', 'password', 'role']);
     $userData = sanitizeUserInput($input);
+
     $userData['email'] = validateEmail($userData['email']);
     $password = password_hash($input['password'], PASSWORD_DEFAULT);
     $input_role = $input['role'];
-    $status = $input_role === 'customer' ? 'active' : ($userData['status'] ?? 'inactive');
+    $status = $input_role === 'customer' ? 'active' : ($input['status'] ?? 'inactive');
+
     $branch_id = isset($input['branch_id']) ? (int)$input['branch_id'] : null;
 
     if ($role !== 'admin' && !in_array($input_role, ['employee', 'customer'])) {
