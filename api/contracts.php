@@ -15,7 +15,9 @@ function getContracts() {
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
 
-    $conditions = [];
+    $branch_id = isset($_GET['branch_id']) && is_numeric($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
+
+    $conditions = ['c.deleted_at IS NULL'];
     $params = [];
 
     // Xử lý quyền truy cập dựa trên vai trò
@@ -23,49 +25,50 @@ function getContracts() {
         // Khách hàng chỉ xem được hợp đồng của chính họ
         $conditions[] = "c.user_id = ?";
         $params[] = $user_id;
+    } elseif ($role === 'admin' && $branch_id) {
+        // Admin: Lọc theo branch_id nếu được truyền
+        $conditions[] = "c.branch_id = ?";
+        $params[] = $branch_id;
     } elseif ($role === 'owner') {
-        $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? LIMIT 1");
-        $stmt->execute([$user_id]);
-        $branch_id = $stmt->fetchColumn();
         if ($branch_id) {
+            // Owner: Lọc theo branch_id cụ thể nếu được truyền
             $conditions[] = "c.branch_id = ?";
             $params[] = $branch_id;
+        } else {
+            // Owner: Thấy tất cả hợp đồng thuộc các chi nhánh họ sở hữu
+            $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+            $params[] = $user_id;
         }
     } elseif ($role === 'employee') {
-        $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? LIMIT 1");
-        $stmt->execute([$user_id]);
-        $branch_id = $stmt->fetchColumn();
         if ($branch_id) {
+            // Employee: Lọc theo branch_id cụ thể nếu được truyền
             $conditions[] = "c.branch_id = ?";
             $params[] = $branch_id;
+        } else {
+            // Employee: Thấy tất cả hợp đồng thuộc các chi nhánh được phân công
+            $conditions[] = "c.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
+            $params[] = $user_id;
         }
-    } elseif ($role !== 'admin') {
-        // Các vai trò khác (ngoại trừ admin) chỉ xem hợp đồng của chi nhánh thuộc sở hữu
-        $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
+    } elseif (!in_array($role, ['admin', 'customer', 'owner', 'employee'])) {
+        // Các vai trò khác: Chỉ thấy hợp đồng thuộc chi nhánh sở hữu
+        $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
         $params[] = $user_id;
     }
 
-    // Xử lý branch_id từ query string (chỉ áp dụng cho admin hoặc khi cần lọc cụ thể)
-    if (!empty($_GET['branch_id']) && $role === 'admin') {
-        $branch_id = (int)$_GET['branch_id'];
-        $conditions[] = "c.branch_id = ?";
-        $params[] = $branch_id;
-    }
-
+    // Lọc theo trạng thái
     if (!empty($_GET['status'])) {
         $conditions[] = "c.status = ?";
         $params[] = $_GET['status'];
     }
 
+    // Tìm kiếm
     if (!empty($_GET['search'])) {
+        $search = '%' . sanitizeInput($_GET['search']) . '%';
         $conditions[] = "(c.id LIKE ? OR u.username LIKE ? OR r.name LIKE ?)";
-        $search = '%' . $_GET['search'] . '%';
         $params[] = $search;
         $params[] = $search;
         $params[] = $search;
     }
-
-    $conditions[] = "c.deleted_at IS NULL";
 
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $query = "
@@ -80,7 +83,14 @@ function getContracts() {
     ";
 
     try {
-        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM contracts c JOIN rooms r ON c.room_id = r.id JOIN users u ON c.user_id = u.id JOIN branches b ON c.branch_id = b.id $whereClause");
+        $countStmt = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM contracts c 
+            JOIN rooms r ON c.room_id = r.id 
+            JOIN users u ON c.user_id = u.id 
+            JOIN branches b ON c.branch_id = b.id 
+            $whereClause
+        ");
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
         $totalPages = ceil($totalRecords / $limit);
@@ -104,7 +114,6 @@ function getContracts() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
 function checkBranchHasEssentialServices(PDO $pdo, int $branchId): bool {
     $stmt = $pdo->prepare("
         SELECT type 

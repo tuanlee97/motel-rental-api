@@ -40,6 +40,14 @@ function getUsers() {
             $params = array_merge($params, $roles);
         }
     }
+    
+    // Xử lý branchId
+    if (!empty($_GET['branchId'])) {
+        $branchId = sanitizeInput($_GET['branchId']);
+        $conditions[] = "(bc.branch_id = ? OR ea.branch_id = ?)";
+        $params[] = $branchId;
+        $params[] = $branchId;
+    }
 
     // Tìm kiếm
     if (!empty($_GET['search'])) {
