@@ -391,6 +391,53 @@ function updateUser() {
         $updates[] = "dob = ?";
         $params[] = $input['dob'];
     }
+    
+    if (isset($input['role'])) {
+        $newRole = $input['role'];
+        $validRoles = ['admin', 'owner', 'employee', 'customer'];
+
+        if (!in_array($newRole, $validRoles)) {
+            responseJson(['status' => 'error', 'message' => 'Vai trò không hợp lệ'], 400);
+            return;
+        }
+
+        // Không được tự thay đổi vai trò của chính mình
+        if ($user_id == $target_user_id) {
+            responseJson(['status' => 'error', 'message' => 'Bạn không thể thay đổi vai trò của chính mình'], 403);
+            return;
+        }
+
+        // Quyền hạn theo vai trò
+        if ($user_role === 'admin') {
+            // Admin có thể gán bất kỳ role nào
+        } elseif ($user_role === 'owner') {
+            // Owner chỉ được gán role là customer hoặc employee
+            if (!in_array($newRole, ['employee', 'customer'])) {
+                responseJson(['status' => 'error', 'message' => 'Owner chỉ có thể gán vai trò là employee hoặc customer'], 403);
+                return;
+            }
+
+            // Kiểm tra xem target user có trong chi nhánh của owner không (đảm bảo owner chỉ quản lý người trong hệ thống mình)
+            $stmt = $pdo->prepare("
+                SELECT 1 FROM users u
+                LEFT JOIN branch_customers bc ON u.id = bc.user_id
+                LEFT JOIN employee_assignments ea ON u.id = ea.employee_id
+                JOIN branches b ON (bc.branch_id = b.id OR ea.branch_id = b.id)
+                WHERE u.id = ? AND b.owner_id = ? AND u.deleted_at IS NULL
+            ");
+            $stmt->execute([$target_user_id, $user_id]);
+            if (!$stmt->fetch()) {
+                responseJson(['status' => 'error', 'message' => 'Bạn không có quyền thay đổi vai trò người dùng này'], 403);
+                return;
+            }
+        } else {
+            responseJson(['status' => 'error', 'message' => 'Bạn không có quyền thay đổi vai trò người dùng'], 403);
+            return;
+        }
+
+        $updates[] = "role = ?";
+        $params[] = $newRole;
+    }
 
     if (isset($input['password']) && !empty(trim($input['password']))) {
         $password = password_hash($input['password'], PASSWORD_DEFAULT);
@@ -482,6 +529,8 @@ function updateUser() {
         if (!empty($updates)) {
             $query = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ? AND deleted_at IS NULL";
             $params[] = $target_user_id;
+            error_log("Cập nhật người dùng ID $target_user_id với dữ liệu: " . json_encode($params));
+            error_log("Truy vấn: $query");
             $stmt = $pdo->prepare($query);
             $stmt->execute($params);
         }

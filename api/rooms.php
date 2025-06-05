@@ -15,61 +15,76 @@ function getRooms() {
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
 
+    $branch_id = isset($_GET['branch_id']) && is_numeric($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
+
     $conditions = [];
     $params = [];
 
+    // 1. CUSTOMER
     if ($role === 'customer') {
-        // Khách hàng chỉ xem phòng của hợp đồng active
         $conditions[] = "c.user_id = ?";
         $params[] = $user_id;
         $conditions[] = "c.status = 'active'";
-    } elseif ($role === 'admin' && !empty($_GET['branch_id'])) {
-        // Admin có thể lọc theo branch_id
-        $branch_id = (int)$_GET['branch_id'];
+    }
+
+    // 2. ADMIN
+    if ($role === 'admin' && $branch_id) {
         $conditions[] = "r.branch_id = ?";
         $params[] = $branch_id;
-    } elseif ($role === 'owner') {
-        $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL LIMIT 1");
-        $stmt->execute([$user_id]);
-        $branch_id = $stmt->fetchColumn();
+    }
+
+    // 3. OWNER
+    if ($role === 'owner') {
         if ($branch_id) {
             $conditions[] = "r.branch_id = ?";
             $params[] = $branch_id;
-        }
-    } elseif ($role === 'employee') {
-        $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL LIMIT 1");
-        $stmt->execute([$user_id]);
-        $branch_id = $stmt->fetchColumn();
-        if ($branch_id) {
-            $conditions[] = "r.branch_id = ?";
-            $params[] = $branch_id;
-        }
-    } else {
-        if ($role !== 'admin') {
+        } else {
             $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
             $params[] = $user_id;
         }
     }
 
+    // 4. EMPLOYEE
+    if ($role === 'employee') {
+        if ($branch_id) {
+            $conditions[] = "r.branch_id = ?";
+            $params[] = $branch_id;
+        } else {
+            // lấy tất cả branch được phân công
+            $conditions[] = "r.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
+            $params[] = $user_id;
+        }
+    }
+
+    // 5. DEFAULT: (ví dụ như đối tác, manager khác...)
+    if (!in_array($role, ['admin', 'customer', 'owner', 'employee']) && !$branch_id) {
+        $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+        $params[] = $user_id;
+    }
+
+    // Lọc theo status nếu có
     if (!empty($_GET['status'])) {
         $conditions[] = "r.status = ?";
         $params[] = $_GET['status'];
     }
 
+    // Tìm kiếm
     if (!empty($_GET['search'])) {
-        $conditions[] = "(r.name LIKE ? OR rt.name LIKE ? OR b.name LIKE ?)";
         $search = '%' . $_GET['search'] . '%';
+        $conditions[] = "(r.name LIKE ? OR rt.name LIKE ? OR b.name LIKE ?)";
         $params[] = $search;
         $params[] = $search;
         $params[] = $search;
     }
 
+    // Kiểm tra soft delete
     $conditions[] = "r.deleted_at IS NULL";
     $conditions[] = "rt.deleted_at IS NULL";
     $conditions[] = "b.deleted_at IS NULL";
 
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
     $joinType = ($role === 'customer') ? "INNER JOIN" : "LEFT JOIN";
+
     $query = "
         SELECT 
             r.id, 
@@ -122,6 +137,7 @@ function getRooms() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
+
 // Tạo phòng
 function createRoom() {
     $pdo = getDB();
@@ -138,7 +154,9 @@ function createRoom() {
     error_log("Input data: " . json_encode($input));
     validateRequiredFields($input, ['branch_id', 'type_id', 'name']);
     $data = sanitizeInput($input);
-
+    if ($input['price'] > 99999999.99) {
+        responseJson(['status' => 'error', 'message' => 'Giá trị price vượt quá giới hạn cho phép.'], 400);
+    }
     if ($role === 'owner') {
         $stmt = $pdo->prepare("SELECT 1 FROM branches WHERE id = ? AND owner_id = ? AND deleted_at IS NULL");
         $stmt->execute([$data['branch_id'], $user_id]);
@@ -433,7 +451,7 @@ function changeRoom() {
         if (empty($utility_usages)) {
             responseJson([
                 'status' => 'error',
-                'message' => "Chưa có dữ liệu utility_usage cho hợp đồng $contract_id (phòng $current_room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
+                'message' => "Chưa có dữ liệu điện / nước cho hợp đồng $contract_id (phòng $current_room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
             ], 400);
             return;
         }

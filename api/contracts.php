@@ -225,7 +225,10 @@ function updateContract() {
     $input = json_decode(file_get_contents('php://input'), true);
     validateRequiredFields($input, ['id', 'room_id', 'user_id', 'start_date', 'end_date', 'branch_id']);
     $data = sanitizeInput($input);
-
+    if (!in_array($data['status'], ['active'])) {
+        responseJson(['status' => 'error', 'message' => 'Trạng thái phòng không hợp lệ'], 400);
+        return;
+    }
     try {
         // Kiểm tra quyền truy cập hợp đồng
         checkResourceExists($pdo, 'contracts', $data['id']);
@@ -521,7 +524,7 @@ function endContract() {
         if (empty($utility_usages)) {
             responseJson([
                 'status' => 'error',
-                'message' => "Chưa có dữ liệu utility_usage cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
+                'message' => "Chưa có dữ liệu điện / nước cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
             ], 400);
             return;
         }

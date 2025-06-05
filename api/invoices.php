@@ -214,7 +214,7 @@ function createInvoice() {
         if (empty($utility_usages)) {
             responseJson([
                 'status' => 'error',
-                'message' => "Chưa có dữ liệu utility_usage cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
+                'message' => "Chưa có dữ liệu điện / nước cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
             ], 400);
             return;
         }
@@ -771,7 +771,7 @@ function updateInvoice($invoice_id) {
         if (empty($utility_usages)) {
             responseJson([
                 'status' => 'error',
-                'message' => "Chưa có dữ liệu utility_usage cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
+                'message' => "Chưa có dữ liệu điện / nước cho hợp đồng $contract_id (phòng $room_id) trong tháng $current_month. Vui lòng cập nhật chỉ số điện/nước."
             ], 400);
             return;
         }
