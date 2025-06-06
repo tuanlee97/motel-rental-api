@@ -6,70 +6,92 @@ require_once __DIR__ . '/utils/common.php';
 
 // Lấy danh sách loại phòng
 function getRoomTypes() {
-    $pdo = getDB();
-    $user = verifyJWT();
-    $user_id = $user['user_id'];
-    $role = $user['role'];
-
-    // Lấy các query parameters
-    $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
-    $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
-    $offset = ($page - 1) * $limit;
-
-    $conditions = [];
-    $params = [];
-
-    // Nếu có truyền branch_id
-    if (!empty($_GET['branch_id'])) {
-        $branch_id = (int)$_GET['branch_id'];
-        $conditions[] = "rt.branch_id = ?";
-        $params[] = $branch_id;
-    } else {
-        // Nếu là owner và chỉ có 1 chi nhánh → mặc định dùng chi nhánh đó
-        if ($role === 'owner') {
-            $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ?");
-            $stmt->execute([$user_id]);
-            $branches = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-            if (count($branches) === 1) {
-                $conditions[] = "rt.branch_id = ?";
-                $params[] = $branches[0];
-            } else {
-                // Có nhiều chi nhánh → lấy theo owner
-                $conditions[] = "rt.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
-                $params[] = $user_id;
-            }
-        } elseif ($role !== 'admin') {
-            // Nếu là staff, không phải admin → giới hạn theo owner
-            $conditions[] = "rt.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
-            $params[] = $user_id;
-        }
-        // admin thì không cần thêm điều kiện
-    }
-
-    $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
-
-    $query = "
-        SELECT rt.id, rt.branch_id, rt.name, rt.description, rt.created_at, b.name AS branch_name
-        FROM room_types rt
-        JOIN branches b ON rt.branch_id = b.id
-        $whereClause
-        ORDER BY rt.created_at DESC
-        LIMIT $limit OFFSET $offset
-    ";
-
+    error_log("Bắt đầu hàm getRoomTypes");
+    
     try {
+        $pdo = getDB();
+        error_log("Kết nối DB thành công");
+
+        $user = verifyJWT();
+        if (!$user) {
+            error_log("Lỗi xác thực JWT");
+            responseJson(['status' => 'error', 'message' => 'Không xác thực được người dùng'], 401);
+            return;
+        }
+        $user_id = $user['user_id'];
+        $role = $user['role'];
+        error_log("User ID: $user_id, Role: $role");
+
+        // Lấy các query parameters
+        $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
+        $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
+        $offset = ($page - 1) * $limit;
+        error_log("Params: page=$page, limit=$limit, offset=$offset");
+
+        $conditions = ['rt.deleted_at IS NULL'];
+        $params = [];
+
+        // Nếu có truyền branch_id
+        if (!empty($_GET['branch_id']) && is_numeric($_GET['branch_id'])) {
+            $branch_id = (int)$_GET['branch_id'];
+            $conditions[] = "rt.branch_id = ?";
+            $params[] = $branch_id;
+            error_log("Branch ID được truyền: $branch_id");
+        } else {
+            error_log("Không có branch_id, kiểm tra role");
+            // Nếu là owner và chỉ có 1 chi nhánh → mặc định dùng chi nhánh đó
+            if ($role === 'owner') {
+                $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL");
+                $stmt->execute([$user_id]);
+                $branches = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                error_log("Số chi nhánh của owner: " . count($branches));
+
+                if (count($branches) === 1) {
+                    $conditions[] = "rt.branch_id = ?";
+                    $params[] = $branches[0];
+                    error_log("Chọn chi nhánh duy nhất: {$branches[0]}");
+                } else {
+                    // Có nhiều chi nhánh → lấy theo owner
+                    $conditions[] = "rt.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+                    $params[] = $user_id;
+                    error_log("Lấy tất cả chi nhánh của owner");
+                }
+            } elseif ($role !== 'admin') {
+                // Nếu là staff, không phải admin → giới hạn theo owner
+                $conditions[] = "rt.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+                $params[] = $user_id;
+                error_log("Giới hạn chi nhánh theo owner cho staff");
+            }
+            // admin thì không cần thêm điều kiện
+        }
+
+        $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
+        error_log("Where clause: $whereClause");
+        error_log("Params: " . json_encode($params));
+
+        $query = "
+            SELECT rt.id, rt.branch_id, rt.name, rt.description, rt.created_at, rt.updated_at, b.name AS branch_name
+            FROM room_types rt
+            LEFT JOIN branches b ON rt.branch_id = b.id
+            $whereClause
+            ORDER BY rt.created_at DESC
+            LIMIT $limit OFFSET $offset
+        ";
+        error_log("Query: $query");
+
         // Lấy tổng số bản ghi
         $countQuery = "SELECT COUNT(*) FROM room_types rt $whereClause";
         $countStmt = $pdo->prepare($countQuery);
         $countStmt->execute($params);
         $totalRecords = $countStmt->fetchColumn();
         $totalPages = ceil($totalRecords / $limit);
+        error_log("Total records: $totalRecords, Total pages: $totalPages");
 
         // Lấy dữ liệu
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $roomTypes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        error_log("Số loại phòng trả về: " . count($roomTypes));
 
         responseJson([
             'status' => 'success',
@@ -77,49 +99,366 @@ function getRoomTypes() {
             'pagination' => [
                 'current_page' => $page,
                 'limit' => $limit,
-                'total_records' => $totalRecords,
-                'total_pages' => $totalPages
+                'total_records' => (int)$totalRecords,
+                'total_pages' => (int)$totalPages
             ]
         ]);
     } catch (PDOException $e) {
-        logError("Lỗi lấy loại phòng: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+        $errorMsg = "Lỗi lấy danh sách loại phòng: " . $e->getMessage();
+        error_log($errorMsg);
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
+    } catch (Exception $e) {
+        $errorMsg = "Lỗi không xác định: " . $e->getMessage();
+        error_log($errorMsg);
+        responseJson(['status' => 'error', 'message' => 'Lỗi hệ thống'], 500);
+    }
+}
+
+// Lấy thông tin loại phòng theo ID
+function getRoomTypeById($id) {
+    error_log("Bắt đầu hàm getRoomTypeById, ID: $id");
+    
+    try {
+        $pdo = getDB();
+        $user = verifyJWT();
+        if (!$user) {
+            error_log("Lỗi xác thực JWT");
+            responseJson(['status' => 'error', 'message' => 'Không xác thực được người dùng'], 401);
+            return;
+        }
+        $user_id = $user['user_id'];
+        $role = $user['role'];
+        error_log("User ID: $user_id, Role: $role");
+
+        $conditions = ['rt.id = ?', 'rt.deleted_at IS NULL'];
+        $params = [(int)$id];
+
+        // Kiểm tra quyền truy cập cho owner và staff
+        if ($role === 'owner' || $role !== 'admin') {
+            $conditions[] = "rt.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+            $params[] = $user_id;
+            error_log("Giới hạn chi nhánh cho owner/staff");
+        }
+
+        $whereClause = "WHERE " . implode(" AND ", $conditions);
+        error_log("Where clause: $whereClause, Params: " . json_encode($params));
+
+        $query = "
+            SELECT rt.id, rt.branch_id, rt.name, rt.description, rt.created_at, rt.updated_at, b.name AS branch_name
+            FROM room_types rt
+            LEFT JOIN branches b ON rt.branch_id = b.id
+            $whereClause
+        ";
+        error_log("Query: $query");
+
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
+        $roomType = $stmt->fetch(PDO::FETCH_ASSOC);
+        error_log("Room type found: " . ($roomType ? 'Yes' : 'No'));
+
+        if (!$roomType) {
+            responseJson(['status' => 'error', 'message' => 'Loại phòng không tồn tại'], 404);
+            return;
+        }
+
+        responseJson(['status' => 'success', 'data' => $roomType]);
+    } catch (PDOException $e) {
+        $errorMsg = "Lỗi lấy thông tin loại phòng: " . $e->getMessage();
+        error_log($errorMsg);
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     }
 }
 
 // Tạo loại phòng
 function createRoomType() {
-    $pdo = getDB();
-    $user = verifyJWT();
-    $user_id = $user['user_id'];
-    $role = $user['role'];
-
-    if ($role !== 'admin' && $role !== 'owner') {
-        responseJson(['status' => 'error', 'message' => 'Không có quyền tạo loại phòng'], 403);
-        return;
-    }
-
-    $input = json_decode(file_get_contents('php://input'), true);
-    validateRequiredFields($input, ['branch_id', 'name']);
-    $data = sanitizeInput($input);
-
-    if ($role === 'owner') {
-        $stmt = $pdo->prepare("SELECT 1 FROM branches WHERE id = ? AND owner_id = ?");
-        $stmt->execute([$data['branch_id'], $user_id]);
-        if (!$stmt->fetch()) {
-            responseJson(['status' => 'error', 'message' => 'Không có quyền tạo loại phòng cho chi nhánh này'], 403);
+    error_log("Bắt đầu hàm createRoomType");
+    
+    try {
+        $pdo = getDB();
+        $user = verifyJWT();
+        if (!$user) {
+            error_log("Lỗi xác thực JWT");
+            responseJson(['status' => 'error', 'message' => 'Không xác thực được người dùng'], 401);
             return;
         }
-    }
+        $user_id = $user['user_id'];
+        $role = $user['role'];
+        error_log("User ID: $user_id, Role: $role");
 
-    try {
-        checkResourceExists($pdo, 'branches', $data['branch_id']);
-        $stmt = $pdo->prepare("INSERT INTO room_types (branch_id, name, description, created_at) VALUES (?, ?, ?, NOW())");
-        $stmt->execute([$data['branch_id'], $data['name'], $data['description'] ?? null]);
+        if ($role !== 'admin' && $role !== 'owner') {
+            error_log("Không có quyền tạo loại phòng");
+            responseJson(['status' => 'error', 'message' => 'Không có quyền tạo loại phòng'], 403);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        error_log("Input data: " . json_encode($input));
+        validateRequiredFields($input, ['branch_id', 'name']);
+        $data = sanitizeInput($input);
+
+        $name = $data['name'];
+        $description = $data['description'] ?? null;
+        $branch_id = (int)$data['branch_id'];
+        error_log("Parsed data: branch_id=$branch_id, name=$name, description=" . ($description ?? 'null'));
+
+        if ($role === 'owner') {
+            $stmt = $pdo->prepare("SELECT 1 FROM branches WHERE id = ? AND owner_id = ? AND deleted_at IS NULL");
+            $stmt->execute([$branch_id, $user_id]);
+            if (!$stmt->fetch()) {
+                error_log("Owner không có quyền cho branch_id: $branch_id");
+                responseJson(['status' => 'error', 'message' => 'Không có quyền tạo loại phòng cho chi nhánh này'], 403);
+                return;
+            }
+        }
+
+        checkResourceExists($pdo, 'branches', $branch_id);
+        error_log("Branch ID $branch_id tồn tại");
+
+        $stmt = $pdo->prepare("
+            INSERT INTO room_types (branch_id, name, description, created_at)
+            VALUES (?, ?, ?, NOW())
+        ");
+        $stmt->execute([$branch_id, $name, $description]);
+        error_log("Tạo loại phòng thành công");
+
         responseJson(['status' => 'success', 'message' => 'Tạo loại phòng thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi tạo loại phòng: " . $e->getMessage());
-        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
+        $errorMsg = "Lỗi tạo loại phòng: " . $e->getMessage();
+        error_log($errorMsg);
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
+    }
+}
+
+// Cập nhật toàn bộ thông tin loại phòng
+function updateRoomType($id) {
+    error_log("Bắt đầu hàm updateRoomType, ID: $id");
+    
+    try {
+        $pdo = getDB();
+        $user = verifyJWT();
+        if (!$user) {
+            error_log("Lỗi xác thực JWT");
+            responseJson(['status' => 'error', 'message' => 'Không xác thực được người dùng'], 401);
+            return;
+        }
+        $user_id = $user['user_id'];
+        $role = $user['role'];
+        error_log("User ID: $user_id, Role: $role");
+
+        if ($role !== 'admin' && $role !== 'owner') {
+            error_log("Không có quyền cập nhật loại phòng");
+            responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật loại phòng'], 403);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        error_log("Input data: " . json_encode($input));
+        validateRequiredFields($input, ['name', 'branch_id']);
+        $data = sanitizeInput($input);
+
+        $name = $data['name'];
+        $description = $data['description'] ?? null;
+        $branch_id = (int)$data['branch_id'];
+        error_log("Parsed data: branch_id=$branch_id, name=$name, description=" . ($description ?? 'null'));
+
+        if ($role === 'owner') {
+            $stmt = $pdo->prepare("SELECT 1 FROM branches WHERE id = ? AND owner_id = ? AND deleted_at IS NULL");
+            $stmt->execute([$branch_id, $user_id]);
+            if (!$stmt->fetch()) {
+                error_log("Owner không có quyền cho branch_id: $branch_id");
+                responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật loại phòng cho chi nhánh này'], 403);
+                return;
+            }
+        }
+
+        checkResourceExists($pdo, 'branches', $branch_id);
+        error_log("Branch ID $branch_id tồn tại");
+
+        $stmt = $pdo->prepare("SELECT 1 FROM room_types WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$id]);
+        if (!$stmt->fetch()) {
+            error_log("Loại phòng không tồn tại, ID: $id");
+            responseJson(['status' => 'error', 'message' => 'Loại phòng không tồn tại'], 404);
+            return;
+        }
+
+        $stmt = $pdo->prepare("
+            UPDATE room_types
+            SET name = ?, description = ?, branch_id = ?, updated_at = NOW()
+            WHERE id = ? AND deleted_at IS NULL
+        ");
+        $stmt->execute([$name, $description, $branch_id, $id]);
+        error_log("Cập nhật loại phòng thành công");
+
+        responseJson(['status' => 'success', 'message' => 'Cập nhật loại phòng thành công']);
+    } catch (PDOException $e) {
+        $errorMsg = "Lỗi cập nhật loại phòng: " . $e->getMessage();
+        error_log($errorMsg);
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
+    }
+}
+
+// Cập nhật một phần thông tin loại phòng
+function patchRoomType($id) {
+    error_log("Bắt đầu hàm patchRoomType, ID: $id");
+    
+    try {
+        $pdo = getDB();
+        $user = verifyJWT();
+        if (!$user) {
+            error_log("Lỗi xác thực JWT");
+            responseJson(['status' => 'error', 'message' => 'Không xác thực được người dùng'], 401);
+            return;
+        }
+        $user_id = $user['user_id'];
+        $role = $user['role'];
+        error_log("User ID: $user_id, Role: $role");
+
+        if ($role !== 'admin' && $role !== 'owner') {
+            error_log("Không có quyền cập nhật loại phòng");
+            responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật loại phòng'], 403);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        error_log("Input data: " . json_encode($input));
+        if (empty($input) || !is_array($input)) {
+            error_log("Dữ liệu đầu vào không hợp lệ");
+            responseJson(['status' => 'error', 'message' => 'Dữ liệu đầu vào không hợp lệ'], 400);
+            return;
+        }
+        $data = sanitizeInput($input);
+
+        $fields = [];
+        $params = [];
+        $allowedFields = ['name', 'description', 'branch_id'];
+
+        foreach ($allowedFields as $field) {
+            if (array_key_exists($field, $data)) {
+                $fields[] = "$field = ?";
+                if ($field === 'branch_id') {
+                    $params[] = (int)$data[$field];
+                } else {
+                    $params[] = $data[$field];
+                }
+            }
+        }
+
+        if (empty($fields)) {
+            error_log("Không có fields để cập nhật");
+            responseJson(['status' => 'error', 'message' => 'Không có trường nào để cập nhật'], 400);
+            return;
+        }
+
+        error_log("Fields to update: " . implode(", ", $fields));
+
+        if ($role === 'owner') {
+            $branch_id = array_key_exists('branch_id', $data) ? (int)$data['branch_id'] : null;
+            if ($branch_id) {
+                $stmt = $pdo->prepare("SELECT 1 FROM branches WHERE id = ? AND owner_id = ? AND deleted_at IS NULL");
+                $stmt->execute([$branch_id, $user_id]);
+                if (!$stmt->fetch()) {
+                    error_log("Owner không có quyền cho branch_id: $branch_id");
+                    responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật loại phòng cho chi nhánh này'], 403);
+                    return;
+                }
+            } else {
+                // Kiểm tra quyền sở hữu loại phòng hiện tại
+                $stmt = $pdo->prepare("
+                    SELECT 1 FROM room_types rt
+                    JOIN branches b ON rt.branch_id = b.id
+                    WHERE rt.id = ? AND b.owner_id = ? AND rt.deleted_at IS NULL
+                ");
+                $stmt->execute([$id, $user_id]);
+                if (!$stmt->fetch()) {
+                    error_log("Owner không có quyền với room type ID: $id");
+                    responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật loại phòng này'], 403);
+                    return;
+                }
+            }
+        }
+
+        if (array_key_exists('branch_id', $data)) {
+            checkResourceExists($pdo, 'branches', (int)$data['branch_id']);
+            error_log("Branch ID {$data['branch_id']} tồn tại");
+        }
+
+        $stmt = $pdo->prepare("SELECT 1 FROM room_types WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$id]);
+        if (!$stmt->fetch()) {
+            error_log("Loại phòng không tồn tại, ID: $id");
+            responseJson(['status' => 'error', 'message' => 'Loại phòng không tồn tại'], 404);
+            return;
+        }
+
+        $params[] = $id;
+        $query = "UPDATE room_types SET " . implode(", ", $fields) . ", updated_at = NOW() WHERE id = ? AND deleted_at IS NULL";
+        error_log("Query: $query");
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
+        error_log("Cập nhật một phần thông tin loại phòng thành công");
+
+        responseJson(['status' => 'success', 'message' => 'Cập nhật loại phòng thành công']);
+    } catch (PDOException $e) {
+        $errorMsg = "Lỗi cập nhật loại phòng một phần: " . $e->getMessage();
+        error_log($errorMsg);
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
+    }
+}
+
+// Xóa loại phòng (soft delete)
+function deleteRoomType($id) {
+    error_log("Bắt đầu hàm deleteRoomType, ID: $id");
+    
+    try {
+        $pdo = getDB();
+        $user = verifyJWT();
+        if (!$user) {
+            error_log("Lỗi xác thực JWT");
+            responseJson(['status' => 'error', 'message' => 'Không xác thực được người dùng'], 401);
+            return;
+        }
+        $user_id = $user['user_id'];
+        $role = $user['role'];
+        error_log("User ID: $user_id, Role: $role");
+
+        if ($role !== 'admin' && $role !== 'owner') {
+            error_log("Không có quyền xóa loại phòng");
+            responseJson(['status' => 'error', 'message' => 'Không có quyền xóa loại phòng'], 403);
+            return;
+        }
+
+        if ($role === 'owner') {
+            $stmt = $pdo->prepare("
+                SELECT 1 FROM room_types rt
+                JOIN branches b ON rt.branch_id = b.id
+                WHERE rt.id = ? AND b.owner_id = ? AND rt.deleted_at IS NULL
+            ");
+            $stmt->execute([$id, $user_id]);
+            if (!$stmt->fetch()) {
+                error_log("Owner không có quyền xóa với ID: $id");
+                responseJson(['status' => 'error', 'message' => 'Không có quyền xóa loại phòng này'], 403);
+                return;
+            }
+        }
+
+        $stmt = $pdo->prepare("SELECT 1 FROM room_types WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$id]);
+        if (!$stmt->fetch()) {
+            error_log("Loại phòng không tồn tại, ID: $id");
+            responseJson(['status' => 'error', 'message' => 'Loại phòng không tồn tại'], 404);
+            return;
+        }
+
+        $stmt = $pdo->prepare("UPDATE room_types SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$id]);
+        error_log("Xóa loại phòng thành công");
+
+        responseJson(['status' => 'success', 'message' => 'Xóa loại phòng thành công']);
+    } catch (PDOException $e) {
+        $errorMsg = "Lỗi xóa loại phòng: " . $e->getMessage();
+        error_log($errorMsg);
+        responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     }
 }
 ?>

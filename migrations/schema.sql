@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS room_types (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
     INDEX idx_room_types_branch_id (branch_id)
