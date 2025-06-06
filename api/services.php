@@ -93,18 +93,27 @@ function getServiceById() {
     $params = [$service_id];
 
     if ($role === 'owner') {
-        $condition .= " AND s.branch_id IN (SELECT id FROM branches WHERE owner_id = ?)";
+        $condition .= " AND s.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
         $params[] = $user_id;
     } elseif ($role === 'employee') {
-        $condition .= " AND s.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
+        $condition .= " AND s.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
         $params[] = $user_id;
     } elseif ($role === 'customer') {
         $condition .= " AND s.branch_id IN (SELECT branch_id FROM branch_customers WHERE user_id = ?)";
         $params[] = $user_id;
+    } elseif ($role !== 'admin') {
+        responseJson(['message' => 'Không có quyền xem dịch vụ này'], 403);
+        return;
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT s.id, s.branch_id, s.name, s.price, s.unit, s.type, s.created_at FROM services s WHERE s.id = ? $condition");
+        $stmt = $pdo->prepare("
+            SELECT s.id, s.branch_id, s.name, s.price, s.unit, s.type, s.created_at, b.owner_id, u.name AS owner_name
+            FROM services s
+            JOIN branches b ON s.branch_id = b.id
+            JOIN users u ON b.owner_id = u.id
+            WHERE s.id = ? $condition
+        ");
         $stmt->execute($params);
         $service = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -126,7 +135,7 @@ function createService() {
     $user_id = $user['user_id'];
     $role = $user['role'];
 
-    if ($role !== 'owner') {
+    if ($role !== 'admin' && $role !== 'owner') {
         responseJson(['message' => 'Không có quyền tạo dịch vụ'], 403);
         return;
     }
@@ -145,20 +154,22 @@ function createService() {
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ?");
+    // Kiểm tra chi nhánh tồn tại
+    $stmt = $pdo->prepare("SELECT id, owner_id FROM branches WHERE id = ? AND deleted_at IS NULL");
     $stmt->execute([$branch_id]);
-    if (!$stmt->fetch()) {
+    $branch = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$branch) {
         responseJson(['message' => 'Chi nhánh không tồn tại'], 400);
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ? AND owner_id = ?");
-    $stmt->execute([$branch_id, $user_id]);
-    if (!$stmt->fetch()) {
+    // Nếu là owner, kiểm tra quyền sở hữu chi nhánh
+    if ($role === 'owner' && $branch['owner_id'] != $user_id) {
         responseJson(['message' => 'Không có quyền tạo dịch vụ cho chi nhánh này'], 403);
         return;
     }
 
+    // Kiểm tra dịch vụ trùng tên trong chi nhánh
     $stmt = $pdo->prepare("SELECT id FROM services WHERE branch_id = ? AND name = ? AND is_deleted = 0");
     $stmt->execute([$branch_id, $name]);
     if ($stmt->fetch()) {
@@ -167,18 +178,20 @@ function createService() {
     }
 
     try {
-        $stmt = $pdo->prepare("INSERT INTO services (branch_id, name, price, unit, type) VALUES (?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("
+            INSERT INTO services (branch_id, name, price, unit, type, created_at)
+            VALUES (?, ?, ?, ?, ?, NOW())
+        ");
         $stmt->execute([$branch_id, $name, $price, $unit, $type]);
 
         $service_id = $pdo->lastInsertId();
-        createNotification($pdo, $user_id, "Dịch vụ '$name' đã được thêm vào chi nhánh.");
+        createNotification($pdo, $branch['owner_id'], "Dịch vụ '$name' đã được thêm vào chi nhánh ID $branch_id.");
         responseJson(['data' => ['id' => $service_id], 'message' => 'Tạo dịch vụ thành công'], 201);
     } catch (PDOException $e) {
         error_log("Error creating service: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
 function updateService() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -186,7 +199,7 @@ function updateService() {
     $role = $user['role'];
     $service_id = getResourceIdFromUri('#/services/([0-9]+)#');
 
-    if ($role !== 'owner') {
+    if ($role !== 'admin' && $role !== 'owner') {
         responseJson(['message' => 'Không có quyền cập nhật dịch vụ'], 403);
         return;
     }
@@ -197,11 +210,23 @@ function updateService() {
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT s.id, s.branch_id FROM services s JOIN branches b ON s.branch_id = b.id WHERE s.id = ? AND b.owner_id = ? AND s.is_deleted = 0");
-    $stmt->execute([$service_id, $user_id]);
+    // Kiểm tra dịch vụ tồn tại
+    $condition = $role === 'admin' ? "AND s.is_deleted = 0" : "AND s.is_deleted = 0 AND b.owner_id = ?";
+    $params = [$service_id];
+    if ($role === 'owner') {
+        $params[] = $user_id;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT s.id, s.branch_id, b.owner_id
+        FROM services s
+        JOIN branches b ON s.branch_id = b.id
+        WHERE s.id = ? $condition
+    ");
+    $stmt->execute($params);
     $service = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$service) {
-        responseJson(['message' => 'Dịch vụ không tồn tại hoặc bạn không có quyền cập nhật'], 403);
+        responseJson(['message' => 'Dịch vụ không tồn tại hoặc bạn không có quyền cập nhật'], 404);
         return;
     }
 
@@ -237,15 +262,14 @@ function updateService() {
     }
     if (!empty($input['branch_id'])) {
         $branch_id = (int)$input['branch_id'];
-        $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT id, owner_id FROM branches WHERE id = ? AND deleted_at IS NULL");
         $stmt->execute([$branch_id]);
-        if (!$stmt->fetch()) {
+        $branch = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$branch) {
             responseJson(['message' => 'Chi nhánh không tồn tại'], 400);
             return;
         }
-        $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ? AND owner_id = ?");
-        $stmt->execute([$branch_id, $user_id]);
-        if (!$stmt->fetch()) {
+        if ($role === 'owner' && $branch['owner_id'] != $user_id) {
             responseJson(['message' => 'Không có quyền chuyển dịch vụ sang chi nhánh này'], 403);
             return;
         }
@@ -259,19 +283,18 @@ function updateService() {
     }
 
     try {
-        $query = "UPDATE services SET " . implode(', ', $updates) . " WHERE id = ?";
+        $query = "UPDATE services SET " . implode(', ', $updates) . ", updated_at = NOW() WHERE id = ?";
         $params[] = $service_id;
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
 
-        createNotification($pdo, $user_id, "Dịch vụ ID $service_id đã được cập nhật.");
+        createNotification($pdo, $service['owner_id'], "Dịch vụ ID $service_id đã được cập nhật.");
         responseJson(['data' => ['id' => $service_id], 'message' => 'Cập nhật dịch vụ thành công']);
     } catch (PDOException $e) {
         error_log("Error updating service ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
 function deleteService() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -279,23 +302,35 @@ function deleteService() {
     $role = $user['role'];
     $service_id = getResourceIdFromUri('#/services/([0-9]+)#');
 
-    if ($role !== 'owner') {
+    if ($role !== 'admin' && $role !== 'owner') {
         responseJson(['message' => 'Không có quyền xóa dịch vụ'], 403);
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT s.id FROM services s JOIN branches b ON s.branch_id = b.id WHERE s.id = ? AND b.owner_id = ? AND s.is_deleted = 0");
-    $stmt->execute([$service_id, $user_id]);
-    if (!$stmt->fetch()) {
-        responseJson(['message' => 'Dịch vụ không tồn tại hoặc bạn không có quyền xóa'], 403);
+    $condition = $role === 'admin' ? "AND s.is_deleted = 0" : "AND s.is_deleted = 0 AND b.owner_id = ?";
+    $params = [$service_id];
+    if ($role === 'owner') {
+        $params[] = $user_id;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT s.id, b.owner_id
+        FROM services s
+        JOIN branches b ON s.branch_id = b.id
+        WHERE s.id = ? $condition
+    ");
+    $stmt->execute($params);
+    $service = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$service) {
+        responseJson(['message' => 'Dịch vụ không tồn tại hoặc bạn không có quyền xóa'], 404);
         return;
     }
 
     try {
-        $stmt = $pdo->prepare("UPDATE services SET is_deleted = 1 WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE services SET is_deleted = 1, updated_at = NOW() WHERE id = ?");
         $stmt->execute([$service_id]);
 
-        createNotification($pdo, $user_id, "Dịch vụ ID $service_id đã được xóa mềm.");
+        createNotification($pdo, $service['owner_id'], "Dịch vụ ID $service_id đã được xóa mềm.");
         responseJson(['data' => ['id' => $service_id], 'message' => 'Xóa dịch vụ thành công']);
     } catch (PDOException $e) {
         error_log("Error deleting service ID $service_id: " . $e->getMessage());

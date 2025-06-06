@@ -4,13 +4,11 @@ require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/utils/common.php';
 // Lấy danh sách chi nhánh
-// Lấy danh sách chi nhánh
 function getBranches() {
     $pdo = getDB();
     $user = verifyJWT();
     $user_id = $user['user_id'];
     $role = $user['role'];
-    error_log("User ID: $user_id, Role: $role", 0);
 
     // Phân trang
     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
@@ -18,24 +16,26 @@ function getBranches() {
     $offset = ($page - 1) * $limit;
 
     // Điều kiện lọc
-    $conditions = ['b.deleted_at IS NULL', 'u.deleted_at IS NULL']; // Fixed typo here
+    $conditions = ['b.deleted_at IS NULL', 'u.deleted_at IS NULL'];
     $params = [];
 
     // Phân quyền
     if ($role === 'customer') {
-        // Khách hàng chỉ xem chi nhánh của hợp đồng active
         $conditions[] = "b.id IN (SELECT branch_id FROM contracts WHERE user_id = ? AND status = 'active' AND deleted_at IS NULL)";
         $params[] = $user_id;
     } elseif ($role === 'admin') {
-        // Admin có thể xem tất cả chi nhánh, không cần branch_id
+        // Admin có thể lọc theo userId (owner) hoặc branch_id
+        if (!empty($_GET['userId'])) {
+            $userId = sanitizeInput($_GET['userId']);
+            $conditions[] = "b.owner_id = ?";
+            $params[] = $userId;
+        }
         if (!empty($_GET['branch_id'])) {
-            // Nếu có branch_id, lọc theo chi nhánh cụ thể
             $branch_id = (int)$_GET['branch_id'];
             $conditions[] = "b.id = ?";
             $params[] = $branch_id;
         }
-        // Không thêm điều kiện nếu không có branch_id
-       
+        // Không thêm điều kiện nếu không có userId hoặc branch_id
     } elseif ($role === 'owner') {
         $conditions[] = "b.owner_id = ?";
         $params[] = $user_id;
@@ -117,10 +117,10 @@ function getBranchById() {
     if ($role === 'admin') {
         // Admin thấy tất cả
     } elseif ($role === 'owner') {
-        $condition = "AND b.owner_id = ?";
+        $condition = "AND b.owner_id = ? AND b.deleted_at IS NULL";
         $params[] = $user_id;
     } elseif ($role === 'employee') {
-        $condition = "AND b.id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ?)";
+        $condition = "AND b.id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL) AND b.deleted_at IS NULL";
         $params[] = $user_id;
     } else {
         responseJson(['message' => 'Không có quyền xem chi nhánh này'], 403);
@@ -132,7 +132,7 @@ function getBranchById() {
             SELECT b.id, b.owner_id, b.name, b.address, b.phone, b.created_at, u.name AS owner_name
             FROM branches b
             JOIN users u ON b.owner_id = u.id
-            WHERE b.id = ? $condition
+            WHERE b.id = ? $condition AND b.deleted_at IS NULL
         ");
         $stmt->execute($params);
         $branch = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -146,7 +146,7 @@ function getBranchById() {
         $stmt = $pdo->prepare("
             SELECT id AS service_id, name, price, unit
             FROM services
-            WHERE branch_id = ?
+            WHERE branch_id = ? AND deleted_at IS NULL
         ");
         $stmt->execute([$branch_id]);
         $branch['services'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -157,7 +157,6 @@ function getBranchById() {
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
 function createBranch() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -183,8 +182,8 @@ function createBranch() {
         return;
     }
 
-    // Kiểm tra owner_id hợp lệ
-    $stmt = $pdo->prepare("SELECT id, role FROM users WHERE id = ? AND role = 'owner'");
+    // Kiểm tra owner_id hợp lệ và chưa bị xóa
+    $stmt = $pdo->prepare("SELECT id, role FROM users WHERE id = ? AND role = 'owner' AND deleted_at IS NULL");
     $stmt->execute([$owner_id]);
     if (!$stmt->fetch()) {
         responseJson(['message' => 'Người dùng không tồn tại hoặc không phải chủ nhà trọ'], 400);
@@ -199,8 +198,8 @@ function createBranch() {
 
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO branches (owner_id, name, address, phone)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO branches (owner_id, name, address, phone, created_at)
+            VALUES (?, ?, ?, ?, NOW())
         ");
         $stmt->execute([$owner_id, $name, $address, $phone]);
         $branch_id = $pdo->lastInsertId();
@@ -243,7 +242,7 @@ function updateBranch() {
     }
 
     // Kiểm tra owner_id hợp lệ
-    $stmt = $pdo->prepare("SELECT id, role FROM users WHERE id = ? AND role = 'owner'");
+    $stmt = $pdo->prepare("SELECT id, role FROM users WHERE id = ? AND role = 'owner' AND deleted_at IS NULL");
     $stmt->execute([$owner_id]);
     if (!$stmt->fetch()) {
         responseJson(['message' => 'Người dùng không tồn tại hoặc không phải chủ nhà trọ'], 400);
@@ -251,7 +250,7 @@ function updateBranch() {
     }
 
     // Kiểm tra quyền truy cập
-    $condition = ($role === 'admin') ? "" : "AND owner_id = ?";
+    $condition = ($role === 'admin') ? "AND deleted_at IS NULL" : "AND owner_id = ? AND deleted_at IS NULL";
     $params = [$branch_id];
     if ($role === 'owner') {
         $params[] = $user_id;
@@ -267,7 +266,7 @@ function updateBranch() {
     try {
         $stmt = $pdo->prepare("
             UPDATE branches 
-            SET name = ?, address = ?, phone = ?, owner_id = ?
+            SET name = ?, address = ?, phone = ?, owner_id = ?, updated_at = NOW()
             WHERE id = ?
         ");
         $stmt->execute([$name, $address, $phone, $owner_id, $branch_id]);
@@ -297,21 +296,23 @@ function deleteBranch() {
     }
 
     try {
-        // Kiểm tra chi nhánh có tồn tại
-        checkResourceExists($pdo, 'branches', $branch_id);
-
-        // Nếu là owner, kiểm tra xem branch_id có thuộc về user_id không
-        if ($role === 'owner') {
-            $stmt = $pdo->prepare("SELECT id FROM branches WHERE id = ? AND owner_id = ?");
-            $stmt->execute([$branch_id, $user_id]);
-            if (!$stmt->fetch()) {
-                responseJson(['message' => 'Bạn không có quyền xóa chi nhánh này'], 403);
-                return;
-            }
+        // Kiểm tra chi nhánh có tồn tại và chưa bị xóa
+        $stmt = $pdo->prepare("SELECT id, owner_id FROM branches WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$branch_id]);
+        $branch = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$branch) {
+            responseJson(['message' => 'Chi nhánh không tồn tại'], 404);
+            return;
         }
 
-        // Thực hiện xóa chi nhánh
-        $stmt = $pdo->prepare("DELETE FROM branches WHERE id = ?");
+        // Nếu là owner, kiểm tra xem branch_id có thuộc về user_id không
+        if ($role === 'owner' && $branch['owner_id'] != $user_id) {
+            responseJson(['message' => 'Bạn không có quyền xóa chi nhánh này'], 403);
+            return;
+        }
+
+        // Thực hiện soft delete
+        $stmt = $pdo->prepare("UPDATE branches SET deleted_at = NOW() WHERE id = ?");
         $stmt->execute([$branch_id]);
 
         createNotification($pdo, $user_id, "Chi nhánh ID $branch_id đã được xóa.");

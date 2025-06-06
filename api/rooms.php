@@ -16,61 +16,92 @@ function getRooms() {
     $offset = ($page - 1) * $limit;
 
     $branch_id = isset($_GET['branch_id']) && is_numeric($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
+    $userId = isset($_GET['userId']) && is_numeric($_GET['userId']) ? (int)$_GET['userId'] : null;
 
     $conditions = [];
     $params = [];
 
-    // 1. CUSTOMER
-    if ($role === 'customer') {
-        $conditions[] = "c.user_id = ?";
-        $params[] = $user_id;
-        $conditions[] = "c.status = 'active'";
-    }
+    // Kiểm tra userId và vai trò của userId
+    if ($userId && $role === 'admin') {
+        // Lấy vai trò của userId
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$userId]);
+        $targetUser = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // 2. ADMIN
-    if ($role === 'admin' && $branch_id) {
-        $conditions[] = "r.branch_id = ?";
-        $params[] = $branch_id;
-    }
+        if (!$targetUser) {
+            responseJson(['status' => 'error', 'message' => 'Người dùng không tồn tại'], 404);
+            return;
+        }
 
-    // 3. OWNER
-    if ($role === 'owner') {
-        if ($branch_id) {
+        $targetRole = $targetUser['role'];
+
+        if ($targetRole === 'owner') {
+            $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+            $params[] = $userId;
+        } elseif ($targetRole === 'employee') {
+            $conditions[] = "r.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
+            $params[] = $userId;
+        } elseif ($targetRole === 'customer') {
+            $conditions[] = "c.user_id = ?";
+            $params[] = $userId;
+            $conditions[] = "c.status = 'active'";
+        } else {
+            responseJson(['status' => 'error', 'message' => 'Vai trò không hợp lệ để lọc phòng'], 400);
+            return;
+        }
+    } else {
+        // Logic hiện tại nếu không có userId hoặc không phải admin
+        // 1. CUSTOMER
+        if ($role === 'customer') {
+            $conditions[] = "c.user_id = ?";
+            $params[] = $user_id;
+            $conditions[] = "c.status = 'active'";
+        }
+
+        // 2. ADMIN
+        if ($role === 'admin' && $branch_id) {
             $conditions[] = "r.branch_id = ?";
             $params[] = $branch_id;
-        } else {
+        }
+
+        // 3. OWNER
+        if ($role === 'owner') {
+            if ($branch_id) {
+                $conditions[] = "r.branch_id = ?";
+                $params[] = $branch_id;
+            } else {
+                $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+                $params[] = $user_id;
+            }
+        }
+
+        // 4. EMPLOYEE
+        if ($role === 'employee') {
+            if ($branch_id) {
+                $conditions[] = "r.branch_id = ?";
+                $params[] = $branch_id;
+            } else {
+                $conditions[] = "r.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
+                $params[] = $user_id;
+            }
+        }
+
+        // 5. DEFAULT
+        if (!in_array($role, ['admin', 'customer', 'owner', 'employee']) && !$branch_id) {
             $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
             $params[] = $user_id;
         }
     }
 
-    // 4. EMPLOYEE
-    if ($role === 'employee') {
-        if ($branch_id) {
-            $conditions[] = "r.branch_id = ?";
-            $params[] = $branch_id;
-        } else {
-            // lấy tất cả branch được phân công
-            $conditions[] = "r.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
-            $params[] = $user_id;
-        }
-    }
-
-    // 5. DEFAULT: (ví dụ như đối tác, manager khác...)
-    if (!in_array($role, ['admin', 'customer', 'owner', 'employee']) && !$branch_id) {
-        $conditions[] = "r.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
-        $params[] = $user_id;
-    }
-
     // Lọc theo status nếu có
     if (!empty($_GET['status'])) {
         $conditions[] = "r.status = ?";
-        $params[] = $_GET['status'];
+        $params[] = sanitizeInput($_GET['status']);
     }
 
     // Tìm kiếm
     if (!empty($_GET['search'])) {
-        $search = '%' . $_GET['search'] . '%';
+        $search = '%' . sanitizeInput($_GET['search']) . '%';
         $conditions[] = "(r.name LIKE ? OR rt.name LIKE ? OR b.name LIKE ?)";
         $params[] = $search;
         $params[] = $search;
@@ -83,7 +114,7 @@ function getRooms() {
     $conditions[] = "b.deleted_at IS NULL";
 
     $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
-    $joinType = ($role === 'customer') ? "INNER JOIN" : "LEFT JOIN";
+    $joinType = ($role === 'customer' || ($userId && $targetRole === 'customer')) ? "INNER JOIN" : "LEFT JOIN";
 
     $query = "
         SELECT 
@@ -137,7 +168,6 @@ function getRooms() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
 // Tạo phòng
 function createRoom() {
     $pdo = getDB();

@@ -93,7 +93,7 @@ function handleApiRequest($method, $uri)
         "POST:branches" => [
             "file" => "../api/branches.php",
             "handler" => "createBranch",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:branches/([0-9]+)" => [
             "file" => "../api/branches.php",
@@ -103,12 +103,12 @@ function handleApiRequest($method, $uri)
         "PUT:branches/([0-9]+)" => [
             "file" => "../api/branches.php",
             "handler" => "updateBranch",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "DELETE:branches/([0-9]+)" => [
             "file" => "../api/branches.php",
             "handler" => "deleteBranch",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:branches/([0-9]+)/rooms_customers" => [
             "file" => "../api/branches.php",
@@ -124,7 +124,7 @@ function handleApiRequest($method, $uri)
         "POST:rooms" => [
             "file" => "../api/rooms.php",
             "handler" => "createRoom",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:rooms/([0-9]+)" => [
             "file" => "../api/rooms.php",
@@ -134,17 +134,17 @@ function handleApiRequest($method, $uri)
         "PUT:rooms/([0-9]+)" => [
             "file" => "../api/rooms.php",
             "handler" => "updateRoom",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "PATCH:rooms/([0-9]+)" => [
             "file" => "../api/rooms.php",
             "handler" => "patchRoom",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "DELETE:rooms/([0-9]+)" => [
             "file" => "../api/rooms.php",
             "handler" => "deleteRoom",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "POST:rooms/change" => [
             "file" => "../api/rooms.php",
@@ -160,7 +160,7 @@ function handleApiRequest($method, $uri)
         "POST:room_occupants" => [
             "file" => "../api/room_occupants.php",
             "handler" => "createRoomOccupant",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         // 'GET:room_occupants/([0-9]+)' => ['file' => '../api/room_occupants.php', 'handler' => 'getRoomOccupantById', 'middleware' => 'auth:admin,owner,employee,customer'],
         "PUT:room_occupants" => [
@@ -184,7 +184,7 @@ function handleApiRequest($method, $uri)
         "POST:room_types" => [
             "file" => "../api/room_types.php",
             "handler" => "createRoomType",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:room_types/([0-9]+)" => [
             "file" => "../api/room_types.php",
@@ -194,17 +194,17 @@ function handleApiRequest($method, $uri)
         "PUT:room_types/([0-9]+)" => [
             "file" => "../api/room_types.php",
             "handler" => "updateRoomType",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "PATCH:room_types/([0-9]+)" => [
             "file" => "../api/room_types.php",
             "handler" => "patchRoomType",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "DELETE:room_types/([0-9]+)" => [
             "file" => "../api/room_types.php",
             "handler" => "deleteRoomType",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         // Services
         "GET:services" => [
@@ -215,7 +215,7 @@ function handleApiRequest($method, $uri)
         "POST:services" => [
             "file" => "../api/services.php",
             "handler" => "createService",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:services/([0-9]+)" => [
             "file" => "../api/services.php",
@@ -225,33 +225,33 @@ function handleApiRequest($method, $uri)
         "PUT:services/([0-9]+)" => [
             "file" => "../api/services.php",
             "handler" => "updateService",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "DELETE:services/([0-9]+)" => [
             "file" => "../api/services.php",
             "handler" => "deleteService",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         // Employees
         "POST:employees" => [
             "file" => "../api/employees.php",
             "handler" => "createEmployee",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "PUT:employees/([0-9]+)" => [
             "file" => "../api/employees.php",
             "handler" => "updateEmployee",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "PATCH:employees/([0-9]+)" => [
             "file" => "../api/employees.php",
             "handler" => "patchEmployee",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "DELETE:employees/([0-9]+)" => [
             "file" => "../api/employees.php",
             "handler" => "deleteEmployee",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         // Utility Usage
         "GET:utility_usage" => [
@@ -262,12 +262,12 @@ function handleApiRequest($method, $uri)
         "POST:utility_usage" => [
             "file" => "../api/utility_usage.php",
             "handler" => "createUtilityUsage",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "POST:utility_usage/bulk" => [
             "file" => "../api/utility_usage.php",
             "handler" => "createBulkUtilityUsage",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         // "GET:utility_usage/([0-9]+)" => [
         //     "file" => "../api/utility_usage.php",
@@ -277,12 +277,12 @@ function handleApiRequest($method, $uri)
         "PUT:utility_usage/([0-9]+)" => [
             "file" => "../api/utility_usage.php",
             "handler" => "updateUtilityUsage",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "DELETE:utility_usage/([0-9]+)" => [
             "file" => "../api/utility_usage.php",
             "handler" => "deleteUtilityUsage",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:utility_usage/latest" => [
             "file" => "../api/utility_usage.php",
@@ -330,7 +330,7 @@ function handleApiRequest($method, $uri)
         "POST:notifications" => [
             "file" => "../api/notifications.php",
             "handler" => "createNotification",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:notifications/([0-9]+)" => [
             "file" => "../api/notifications.php",
@@ -345,7 +345,7 @@ function handleApiRequest($method, $uri)
         "DELETE:notifications/([0-9]+)" => [
             "file" => "../api/notifications.php",
             "handler" => "deleteNotification",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         // Tickets
         "POST:tickets" => [
@@ -382,7 +382,7 @@ function handleApiRequest($method, $uri)
         "POST:contracts" => [
             "file" => "../api/contracts.php",
             "handler" => "createContract",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "GET:contracts/([0-9]+)" => [
             "file" => "../api/contracts.php",
@@ -392,7 +392,7 @@ function handleApiRequest($method, $uri)
         "PUT:contracts/([0-9]+)" => [
             "file" => "../api/contracts.php",
             "handler" => "updateContract",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "POST:contracts/end" => [
             "file" => "../api/contracts.php",
@@ -402,7 +402,7 @@ function handleApiRequest($method, $uri)
         "DELETE:contracts/([0-9]+)" => [
             "file" => "../api/contracts.php",
             "handler" => "deleteContract",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         // Payments
         "GET:payments" => [
@@ -423,17 +423,17 @@ function handleApiRequest($method, $uri)
         "PUT:payments/([0-9]+)" => [
             "file" => "../api/payments.php",
             "handler" => "updatePayment",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "PATCH:payments/([0-9]+)" => [
             "file" => "../api/payments.php",
             "handler" => "patchPayment",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "DELETE:payments/([0-9]+)" => [
             "file" => "../api/payments.php",
             "handler" => "deletePayment",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         // Invoices
         "GET:invoices" => [
@@ -444,12 +444,12 @@ function handleApiRequest($method, $uri)
         "POST:invoices" => [
             "file" => "../api/invoices.php",
             "handler" => "createInvoice",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "POST:invoices/bulk" => [
             "file" => "../api/invoices.php",
             "handler" => "createBulkInvoices",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "GET:invoices/([0-9]+)" => [
             "file" => "../api/invoices.php",
@@ -459,80 +459,80 @@ function handleApiRequest($method, $uri)
         "PUT:invoices/([0-9]+)" => [
             "file" => "../api/invoices.php",
             "handler" => "updateInvoice",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "PATCH:invoices/([0-9]+)" => [
             "file" => "../api/invoices.php",
             "handler" => "patchInvoice",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "DELETE:invoices/([0-9]+)" => [
             "file" => "../api/invoices.php",
             "handler" => "deleteInvoice",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
 
         // Employee Assignments
         "GET:employee_assignments" => [
             "file" => "../api/employee_assignments.php",
             "handler" => "getEmployeeAssignments",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "POST:employee_assignments" => [
             "file" => "../api/employee_assignments.php",
             "handler" => "createEmployeeAssignment",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "GET:employee_assignments/([0-9]+)" => [
             "file" => "../api/employee_assignments.php",
             "handler" => "getEmployeeAssignmentById",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "PUT:employee_assignments/([0-9]+)" => [
             "file" => "../api/employee_assignments.php",
             "handler" => "updateEmployeeAssignment",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "PATCH:employee_assignments/([0-9]+)" => [
             "file" => "../api/employee_assignments.php",
             "handler" => "patchEmployeeAssignment",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "DELETE:employee_assignments/([0-9]+)" => [
             "file" => "../api/employee_assignments.php",
             "handler" => "deleteEmployeeAssignment",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         // Branch Customers
         "GET:branch_customers" => [
             "file" => "../api/branch_customers.php",
             "handler" => "getBranchCustomers",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "POST:branch_customers" => [
             "file" => "../api/branch_customers.php",
             "handler" => "createBranchCustomer",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "GET:branch_customers/([0-9]+)" => [
             "file" => "../api/branch_customers.php",
             "handler" => "getBranchCustomerById",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "PUT:branch_customers/([0-9]+)" => [
             "file" => "../api/branch_customers.php",
             "handler" => "updateBranchCustomer",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "PATCH:branch_customers/([0-9]+)" => [
             "file" => "../api/branch_customers.php",
             "handler" => "patchBranchCustomer",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         "DELETE:branch_customers/([0-9]+)" => [
             "file" => "../api/branch_customers.php",
             "handler" => "deleteBranchCustomer",
-            "middleware" => "auth:owner,employee",
+            "middleware" => "auth:admin,owner,employee",
         ],
         // Reports
     // Reports - Admin: Reports for all branches
@@ -566,27 +566,27 @@ function handleApiRequest($method, $uri)
         "GET:reports/revenue/([0-9]+)" => [
             "file" => "../api/reports.php",
             "handler" => "getRevenueReport",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:reports/rooms/([0-9]+)" => [
             "file" => "../api/reports.php",
             "handler" => "getRoomStatusReport",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:reports/contracts/([0-9]+)" => [
             "file" => "../api/reports.php",
             "handler" => "getContractReport",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:reports/utility-usage/([0-9]+)" => [
             "file" => "../api/reports.php",
             "handler" => "getUtilityUsageReport",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
         "GET:reports/maintenance/([0-9]+)" => [
             "file" => "../api/reports.php",
             "handler" => "getMaintenanceReport",
-            "middleware" => "auth:owner",
+            "middleware" => "auth:admin,owner",
         ],
 
         // Reports - Employee: Reports for assigned branches
