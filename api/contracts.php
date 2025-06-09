@@ -4,10 +4,15 @@ require_once __DIR__ . '/../core/helpers.php';
 require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/utils/common.php';
 
+
 // Lấy danh sách hợp đồng
 function getContracts() {
     $pdo = getDB();
     $user = verifyJWT();
+    if (!$user) {
+        responseJson(['status' => 'error', 'message' => 'Không xác thực được người dùng'], 401);
+        return;
+    }
     $user_id = $user['user_id'];
     $role = $user['role'];
 
@@ -16,6 +21,9 @@ function getContracts() {
     $offset = ($page - 1) * $limit;
 
     $branch_id = isset($_GET['branch_id']) && is_numeric($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
+    $status = isset($_GET['status']) ? sanitizeInput($_GET['status']) : '';
+    $search = isset($_GET['search']) ? sanitizeInput($_GET['search']) : '';
+    $userId = isset($_GET['userId']) && is_numeric($_GET['userId']) ? (int)$_GET['userId'] : null;
 
     $conditions = ['c.deleted_at IS NULL'];
     $params = [];
@@ -25,45 +33,61 @@ function getContracts() {
         // Khách hàng chỉ xem được hợp đồng của chính họ
         $conditions[] = "c.user_id = ?";
         $params[] = $user_id;
-    } elseif ($role === 'admin' && $branch_id) {
-        // Admin: Lọc theo branch_id nếu được truyền
-        $conditions[] = "c.branch_id = ?";
-        $params[] = $branch_id;
-    } elseif ($role === 'owner') {
-        if ($branch_id) {
-            // Owner: Lọc theo branch_id cụ thể nếu được truyền
-            $conditions[] = "c.branch_id = ?";
-            $params[] = $branch_id;
-        } else {
-            // Owner: Thấy tất cả hợp đồng thuộc các chi nhánh họ sở hữu
+    } else {
+        // Xử lý userId (owner) nếu được truyền
+        if ($userId) {
+            // Kiểm tra userId tồn tại và là owner của ít nhất một chi nhánh
+            $stmt = $pdo->prepare("
+                SELECT 1 
+                FROM users u
+                JOIN branches b ON b.owner_id = u.id
+                WHERE u.id = ? AND u.deleted_at IS NULL AND b.deleted_at IS NULL
+                LIMIT 1
+            ");
+            $stmt->execute([$userId]);
+            if (!$stmt->fetch()) {
+                responseJson(['status' => 'error', 'message' => 'Người dùng không phải owner hoặc không tồn tại'], 404);
+                return;
+            }
             $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
-            $params[] = $user_id;
-        }
-    } elseif ($role === 'employee') {
-        if ($branch_id) {
-            // Employee: Lọc theo branch_id cụ thể nếu được truyền
-            $conditions[] = "c.branch_id = ?";
-            $params[] = $branch_id;
+            $params[] = $userId;
         } else {
-            // Employee: Thấy tất cả hợp đồng thuộc các chi nhánh được phân công
-            $conditions[] = "c.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
-            $params[] = $user_id;
+            // Không có userId, áp dụng logic theo vai trò
+            if ($role === 'admin' && $branch_id) {
+                $conditions[] = "c.branch_id = ?";
+                $params[] = $branch_id;
+            } elseif ($role === 'owner') {
+                if ($branch_id) {
+                    $conditions[] = "c.branch_id = ?";
+                    $params[] = $branch_id;
+                } else {
+                    $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+                    $params[] = $user_id;
+                }
+            } elseif ($role === 'employee') {
+                if ($branch_id) {
+                    $conditions[] = "c.branch_id = ?";
+                    $params[] = $branch_id;
+                } else {
+                    $conditions[] = "c.branch_id IN (SELECT branch_id FROM employee_assignments WHERE employee_id = ? AND deleted_at IS NULL)";
+                    $params[] = $user_id;
+                }
+            } elseif (!in_array($role, ['admin', 'customer', 'owner', 'employee'])) {
+                $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
+                $params[] = $user_id;
+            }
         }
-    } elseif (!in_array($role, ['admin', 'customer', 'owner', 'employee'])) {
-        // Các vai trò khác: Chỉ thấy hợp đồng thuộc chi nhánh sở hữu
-        $conditions[] = "c.branch_id IN (SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL)";
-        $params[] = $user_id;
     }
 
     // Lọc theo trạng thái
-    if (!empty($_GET['status'])) {
+    if (!empty($status)) {
         $conditions[] = "c.status = ?";
-        $params[] = $_GET['status'];
+        $params[] = $status;
     }
 
     // Tìm kiếm
-    if (!empty($_GET['search'])) {
-        $search = '%' . sanitizeInput($_GET['search']) . '%';
+    if (!empty($search)) {
+        $search = '%' . $search . '%';
         $conditions[] = "(c.id LIKE ? OR u.username LIKE ? OR r.name LIKE ?)";
         $params[] = $search;
         $params[] = $search;
@@ -79,6 +103,7 @@ function getContracts() {
         JOIN users u ON c.user_id = u.id
         JOIN branches b ON c.branch_id = b.id
         $whereClause
+        ORDER BY c.created_at DESC
         LIMIT $limit OFFSET $offset
     ";
 
@@ -114,6 +139,7 @@ function getContracts() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
+
 function checkBranchHasEssentialServices(PDO $pdo, int $branchId): bool {
     $stmt = $pdo->prepare("
         SELECT type 

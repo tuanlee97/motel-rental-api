@@ -119,8 +119,8 @@ INSERT INTO notifications (user_id, message, is_read, created_at) VALUES
 -- Thêm dữ liệu vào bảng tickets
 INSERT INTO tickets (user_id, room_id, contract_id, subject, description, priority, status, created_at)
 VALUES
-    (8, NULL, NULL, 'Hỏi về hóa đơn', 'Hóa đơn tháng 2 có sai sót, vui lòng kiểm tra.', 'medium', 'open', '2025-02-02 10:00:00'),
-    (11, NULL, NULL, 'Yêu cầu hỗ trợ', 'Cần hỗ trợ về hợp đồng thuê.', 'medium', 'pending', '2025-02-03 11:00:00');
+    (8, 1, 1, 'Hỏi về hóa đơn', 'Hóa đơn tháng 2 có sai sót, vui lòng kiểm tra.', 'medium', 'open', '2025-02-02 10:00:00'),
+    (11, 4, 2, 'Yêu cầu hỗ trợ', 'Cần hỗ trợ về hợp đồng thuê.', 'medium', 'open', '2025-02-03 11:00:00');
 
 
 -- Thêm dữ liệu vào bảng room_occupants

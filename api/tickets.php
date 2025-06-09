@@ -190,11 +190,13 @@ function getCustomerTickets($userId) {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
-// Get All Tickets (Admin/Owner/Employee)
 function getAllTickets() {
     $pdo = getDB();
     $user = verifyJWT();
+    if (!$user) {
+        responseJson(['message' => 'Không xác thực được người dùng'], 401);
+        return;
+    }
     $user_id = $user['user_id'];
     $role = $user['role'];
 
@@ -202,29 +204,59 @@ function getAllTickets() {
     $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) && $_GET['limit'] > 0 ? (int)$_GET['limit'] : 10;
     $offset = ($page - 1) * $limit;
 
+    $userId = isset($_GET['userId']) && is_numeric($_GET['userId']) ? (int)$_GET['userId'] : null;
+    $branch_id = isset($_GET['branch_id']) && is_numeric($_GET['branch_id']) ? (int)$_GET['branch_id'] : null;
     $conditions = [];
     $params = [];
 
-    // Filter by branch
-    if (!empty($_GET['branch_id'])) {
-        $branch_id = (int)$_GET['branch_id'];
-        $conditions[] = "r.branch_id = ?";
-        $params[] = $branch_id;
-    } elseif ($role === 'owner') {
-        $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL LIMIT 1");
-        $stmt->execute([$user_id]);
-        $branch_id = $stmt->fetchColumn();
+    // Xử lý owner_id (chỉ cho admin và owner_id > 0)
+    if ($userId > 0 && $role === 'admin') {
+        $stmt = $pdo->prepare("
+            SELECT 1 
+            FROM users u
+            JOIN branches b ON b.owner_id = u.id
+            WHERE u.id = ? AND u.deleted_at IS NULL AND b.deleted_at IS NULL
+            LIMIT 1
+        ");
+        $stmt->execute([$userId]);
+        if (!$stmt->fetch()) {
+            responseJson(['message' => 'Owner không tồn tại hoặc không sở hữu chi nhánh'], 404);
+            return;
+        }
+        $conditions[] = "t.contract_id IN (
+            SELECT c.id 
+            FROM contracts c 
+            JOIN branches b ON c.branch_id = b.id 
+            WHERE b.owner_id = ? AND c.deleted_at IS NULL AND b.deleted_at IS NULL
+            " . ($branch_id ? "AND c.branch_id = ?" : "") . "
+        )";
+        $params[] = $userId;
         if ($branch_id) {
-            $conditions[] = "r.branch_id = ?";
             $params[] = $branch_id;
         }
-    } elseif ($role === 'employee') {
-        $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? LIMIT 1");
-        $stmt->execute([$user_id]);
-        $branch_id = $stmt->fetchColumn();
+    } elseif ($role !== 'admin' && $userId > 0) {
+        responseJson(['message' => 'Chỉ admin mới có thể lọc theo owner'], 403);
+        return;
+    } else {
         if ($branch_id) {
-            $conditions[] = "r.branch_id = ?";
+            $conditions[] = "c.branch_id = ?";
             $params[] = $branch_id;
+        } elseif ($role === 'owner') {
+            $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? AND deleted_at IS NULL LIMIT 1");
+            $stmt->execute([$user_id]);
+            $branch_id_from_role = $stmt->fetchColumn();
+            if ($branch_id_from_role) {
+                $conditions[] = "c.branch_id = ?";
+                $params[] = $branch_id_from_role;
+            }
+        } elseif ($role === 'employee') {
+            $stmt = $pdo->prepare("SELECT branch_id FROM employee_assignments WHERE employee_id = ? LIMIT 1");
+            $stmt->execute([$user_id]);
+            $branch_id_from_role = $stmt->fetchColumn();
+            if ($branch_id_from_role) {
+                $conditions[] = "c.branch_id = ?";
+                $params[] = $branch_id_from_role;
+            }
         }
     }
 
@@ -257,7 +289,8 @@ function getAllTickets() {
         FROM tickets t
         LEFT JOIN rooms r ON t.room_id = r.id
         JOIN users u ON t.user_id = u.id
-        LEFT JOIN branches b ON r.branch_id = b.id
+        LEFT JOIN contracts c ON t.contract_id = c.id
+        LEFT JOIN branches b ON c.branch_id = b.id
     ";
 
     $query = "
@@ -266,6 +299,7 @@ function getAllTickets() {
             r.name AS room_name, u.name AS user_name, b.name AS branch_name
         $baseJoin
         $whereClause
+        ORDER BY t.created_at DESC
         LIMIT $limit OFFSET $offset
     ";
 
@@ -312,7 +346,6 @@ function getAllTickets() {
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
-
 // Update Ticket (Admin/Owner/Employee)
 function updateTicket($id) {
     $pdo = getDB();

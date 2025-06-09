@@ -173,6 +173,13 @@ function getAllMaintenanceRequests() {
     $conditions = [];
     $params = [];
 
+    // Lọc theo owner_id (chỉ cho admin)
+    if ($role === 'admin' && !empty($_GET['userId']) && is_numeric($_GET['userId'])) {
+        $userId = (int)$_GET['userId'];
+        $conditions[] = "b.owner_id = ?";
+        $params[] = $userId;
+    }
+
     // Xác định branch
     if (!empty($_GET['branch_id'])) {
         $branch_id = (int)$_GET['branch_id'];
