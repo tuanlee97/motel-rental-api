@@ -462,3 +462,188 @@ DO
 BEGIN
     CALL AutoEndContracts();
 END;
+
+
+
+---
+-- -- Đặt delimiter mới để tránh xung đột với dấu ;
+-- DELIMITER $$
+
+-- -- Tạo Stored Procedure
+-- CREATE PROCEDURE AutoEndContracts()
+-- BEGIN
+--     DECLARE done INT DEFAULT FALSE;
+--     DECLARE v_contract_id INT;
+--     DECLARE v_room_id INT;
+--     DECLARE v_user_id INT;
+--     DECLARE v_branch_id INT;
+--     DECLARE v_deposit DECIMAL(10,2);
+--     DECLARE v_room_price DECIMAL(10,2);
+--     DECLARE v_start_date DATE;
+--     DECLARE v_status VARCHAR(20);
+--     DECLARE v_current_date DATE;
+--     DECLARE v_current_month VARCHAR(7);
+--     DECLARE v_days_in_month INT;
+--     DECLARE v_usage_days INT;
+--     DECLARE v_usage_ratio DECIMAL(5,2);
+--     DECLARE v_amount_due DECIMAL(10,2);
+--     DECLARE v_invoice_id INT;
+--     DECLARE utility_count INT;
+
+--     DECLARE contract_cursor CURSOR FOR
+--         SELECT c.id, c.room_id, c.user_id, c.branch_id, c.deposit, r.price, c.start_date, c.status
+--         FROM contracts c
+--         JOIN rooms r ON c.room_id = r.id
+--         WHERE c.status = 'active'
+--         AND c.end_date <= CURDATE()
+--         AND c.deleted_at IS NULL;
+
+--     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+--     SET v_current_date = CURDATE();
+--     SET v_current_month = DATE_FORMAT(v_current_date, '%Y-%m');
+
+--     START TRANSACTION;
+
+--     OPEN contract_cursor;
+
+--     contract_loop: LOOP
+--         FETCH contract_cursor INTO v_contract_id, v_room_id, v_user_id, v_branch_id, v_deposit, v_room_price, v_start_date, v_status;
+--         IF done THEN
+--             LEAVE contract_loop;
+--         END IF;
+
+--         IF v_status != 'active' THEN
+--             UPDATE contracts SET deleted_at = NOW() WHERE id = v_contract_id;
+--             INSERT INTO logs (message, created_at)
+--             VALUES (CONCAT('Hợp đồng ID ', v_contract_id, ' đã bị xóa mềm vì không ở trạng thái active.'), NOW());
+--             ITERATE contract_loop;
+--         END IF;
+
+--         SET v_days_in_month = DAY(LAST_DAY(v_current_date));
+
+--         IF DATE_FORMAT(v_start_date, '%Y-%m') = v_current_month THEN
+--             SET v_usage_days = GREATEST(1, DATEDIFF(v_current_date, v_start_date) + 1);
+--         ELSE
+--             SET v_usage_days = DAY(v_current_date);
+--         END IF;
+
+--         SET v_usage_ratio = v_usage_days / v_days_in_month;
+
+--         SELECT COUNT(*)
+--         INTO utility_count
+--         FROM utility_usage u
+--         JOIN services s ON u.service_id = s.id
+--         WHERE u.room_id = v_room_id
+--           AND u.month = v_current_month
+--           AND u.contract_id = v_contract_id
+--           AND u.recorded_at >= v_start_date
+--           AND u.recorded_at <= v_current_date
+--           AND u.deleted_at IS NULL;
+
+--         IF utility_count = 0 THEN
+--             INSERT INTO utility_usage (
+--                 room_id, contract_id, service_id, usage_amount, month, recorded_at, old_reading, new_reading
+--             )
+--             SELECT
+--                 v_room_id,
+--                 v_contract_id,
+--                 s.id,
+--                 0,
+--                 v_current_month,
+--                 NOW(),
+--                 IFNULL((
+--                     SELECT u.new_reading
+--                     FROM utility_usage u
+--                     WHERE u.room_id = v_room_id AND u.service_id = s.id
+--                     AND u.recorded_at < NOW()
+--                     AND u.deleted_at IS NULL
+--                     ORDER BY u.recorded_at DESC
+--                     LIMIT 1
+--                 ), 0),
+--                 IFNULL((
+--                     SELECT u.new_reading
+--                     FROM utility_usage u
+--                     WHERE u.room_id = v_room_id AND u.service_id = s.id
+--                     AND u.recorded_at < NOW()
+--                     AND u.deleted_at IS NULL
+--                     ORDER BY u.recorded_at DESC
+--                     LIMIT 1
+--                 ), 0)
+--             FROM services s
+--             WHERE s.type IN ('electricity', 'water')
+--               AND s.branch_id = v_branch_id
+--               AND s.deleted_at IS NULL;
+
+--             INSERT INTO logs (message, created_at)
+--             VALUES (CONCAT('Tạo utility_usage mặc định cho hợp đồng ', v_contract_id, ' với chỉ số = 0 hoặc số gần nhất.'), NOW());
+--         END IF;
+
+--         SELECT ROUND(SUM(u.usage_amount * s.price))
+--         INTO v_amount_due
+--         FROM utility_usage u
+--         JOIN services s ON u.service_id = s.id
+--         WHERE u.room_id = v_room_id
+--           AND u.month = v_current_month
+--           AND u.contract_id = v_contract_id
+--           AND u.recorded_at >= v_start_date
+--           AND u.recorded_at <= v_current_date
+--           AND u.deleted_at IS NULL;
+
+--         IF v_amount_due IS NULL THEN
+--             SET v_amount_due = 0;
+--         END IF;
+
+--         SET v_amount_due = v_amount_due + ROUND(v_room_price * v_usage_ratio);
+
+--         UPDATE contracts
+--         SET status = 'expired', end_date = NOW()
+--         WHERE id = v_contract_id;
+
+--         UPDATE rooms
+--         SET status = 'available'
+--         WHERE id = v_room_id;
+
+--         INSERT INTO invoices (contract_id, branch_id, amount, due_date, status, created_at)
+--         VALUES (v_contract_id, v_branch_id, v_amount_due, v_current_date, 'pending', NOW());
+
+--         SET v_invoice_id = LAST_INSERT_ID();
+
+--         INSERT INTO payments (contract_id, amount, due_date, status, created_at)
+--         VALUES (v_contract_id, v_amount_due, v_current_date, 'pending', NOW());
+
+--         IF v_deposit > 0 THEN
+--             INSERT INTO notifications (user_id, message, created_at)
+--             VALUES (v_user_id, CONCAT('Tiền đặt cọc ', v_deposit, ' cho hợp đồng ID ', v_contract_id, ' đã được hoàn.'), NOW());
+--         END IF;
+
+--         INSERT INTO notifications (user_id, message, created_at)
+--         VALUES (v_user_id, CONCAT('Hợp đồng ID ', v_contract_id, ' đã tự động kết thúc. Hóa đơn ID ', v_invoice_id, ' đã được tạo cho ', v_usage_days, '/', v_days_in_month, ' ngày sử dụng trong tháng ', v_current_month, '.'), NOW());
+
+--         INSERT INTO logs (message, created_at)
+--         VALUES (CONCAT('Hợp đồng ID ', v_contract_id, ' đã được kết thúc tự động và tạo hóa đơn ID ', v_invoice_id), NOW());
+
+--     END LOOP;
+
+--     CLOSE contract_cursor;
+--     COMMIT;
+-- END$$
+
+-- -- Đổi lại delimiter về mặc định
+-- DELIMITER ;
+
+-- -- Bật event scheduler
+-- SET GLOBAL event_scheduler = ON;
+
+-- -- Dùng lại delimiter để tạo EVENT
+-- DELIMITER $$
+
+-- CREATE EVENT auto_end_contracts_event
+-- ON SCHEDULE EVERY 1 DAY
+-- STARTS CURRENT_TIMESTAMP
+-- DO
+-- BEGIN
+--     CALL AutoEndContracts();
+-- END$$
+
+-- DELIMITER ;

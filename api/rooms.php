@@ -323,11 +323,19 @@ function deleteRoom() {
     }
 
     try {
-        // Kiểm tra sự tồn tại của phòng
-        $stmt = $pdo->prepare("SELECT 1 FROM rooms WHERE id = ? AND deleted_at IS NULL");
+        // Kiểm tra sự tồn tại và trạng thái phòng
+        $stmt = $pdo->prepare("SELECT status FROM rooms WHERE id = ? AND deleted_at IS NULL");
         $stmt->execute([$room_id]);
-        if (!$stmt->fetch()) {
+        $room = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$room) {
             responseJson(['status' => 'error', 'message' => 'Phòng không tồn tại hoặc đã bị xóa'], 404);
+            return;
+        }
+
+        // Nếu phòng đang được thuê thì không cho phép xóa
+        if ($room['status'] === 'occupied') {
+            responseJson(['status' => 'error', 'message' => 'Phòng đang được thuê, không thể xóa'], 400);
             return;
         }
 
