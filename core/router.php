@@ -84,6 +84,16 @@ function handleApiRequest($method, $uri)
             "handler" => "uploadQrCode",
             "middleware" => "auth:admin,owner,employee",
         ],
+        "POST:upload-id-card" => [
+            "file" => "../api/upload.php",
+            "handler" => "uploadIdCard",
+            "middleware" => "auth:admin,owner,employee,customer",
+        ],
+        "POST:delete-id-card" => [
+            "file" => "../api/upload.php",
+            "handler" => "deleteIdCard",
+            "middleware" => "auth:admin,owner,employee,customer",
+        ],
         // Branches
         "GET:branches" => [
             "file" => "../api/branches.php",

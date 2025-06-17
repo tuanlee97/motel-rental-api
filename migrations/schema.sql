@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
     role ENUM('admin', 'owner', 'employee', 'customer') DEFAULT 'customer',
     status ENUM('active', 'inactive', 'suspended') DEFAULT 'inactive',
     provider ENUM('email', 'google') DEFAULT 'email',
+    front_id_card_url VARCHAR(255) DEFAULT NULL,
+    back_id_card_url VARCHAR(255) DEFAULT NULL,
     bank_details JSON DEFAULT NULL,
     qr_code_url VARCHAR(255) DEFAULT NULL,
     created_by INT NULL,
@@ -17,7 +19,9 @@ CREATE TABLE IF NOT EXISTS users (
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_users_email (email),
-    INDEX idx_users_username (username)
+    INDEX idx_users_username (username),
+    INDEX idx_users_front_id_card (front_id_card_url),
+    INDEX idx_users_back_id_card (back_id_card_url)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS password_resets (

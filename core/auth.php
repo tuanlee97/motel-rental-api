@@ -48,7 +48,10 @@ function verifyJWT() {
     if ($stmt->fetch()) {
         responseJson(['status' => 'error', 'message' => 'Token đã bị hủy'], 401);
     }
-
+    if ($token) {
+        $decoded['token'] = $token;
+    }
+   
     return $decoded;
 }
 function authMiddleware($requiredRoles) {

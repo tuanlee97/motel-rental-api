@@ -14,7 +14,9 @@ function login() {
 
     $pdo = getDB();
     try {
-        $stmt = $pdo->prepare("SELECT id, name, email, username, password, role, status, phone,bank_details,qr_code_url FROM users WHERE username = ? AND provider = 'email'");
+        $stmt = $pdo->prepare("SELECT id, name, email, username, password, role, status, phone, bank_details, qr_code_url, dob,
+        front_id_card_url, back_id_card_url 
+        FROM users WHERE username = ? AND provider = 'email'");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
        

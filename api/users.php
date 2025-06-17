@@ -14,6 +14,11 @@ require_once __DIR__ . '/../vendor/phpmailer/src/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+function isValidUsername($username) {
+    // Không dấu, không khoảng trắng, chỉ cho phép chữ cái, số và dấu gạch dưới
+    return preg_match('/^[a-zA-Z0-9_]+$/', $username);
+}
+
 function getUsers() {
     $pdo = getDB();
     $user = verifyJWT();
@@ -117,6 +122,7 @@ function getUsers() {
             u.status, 
             u.bank_details, 
             u.qr_code_url,
+            u.front_id_card_url, u.back_id_card_url ,
             MAX(COALESCE(bc.branch_id, ea.branch_id)) AS branch_id,
             MAX(b.name) AS branch_name
         FROM users u
@@ -125,6 +131,7 @@ function getUsers() {
         LEFT JOIN branches b ON COALESCE(bc.branch_id, ea.branch_id) = b.id AND b.deleted_at IS NULL
         $whereClause
         GROUP BY u.id
+        ORDER BY u.id DESC
         LIMIT $limit OFFSET $offset
     ";
 
@@ -178,6 +185,13 @@ function createUser() {
     validateRequiredFields($input, ['username', 'email', 'password', 'role']);
     $userData = sanitizeUserInput($input);
 
+    if (!isValidUsername($userData['username'])) {
+    responseJson([
+        'status' => 'error',
+        'message' => 'Tên truy cập chỉ được chứa chữ cái không dấu, số và dấu gạch dưới, không có khoảng trắng.'
+    ], 400);
+    return;
+}
     $userData['email'] = validateEmail($userData['email']);
     $password = password_hash($input['password'], PASSWORD_DEFAULT);
     $input_role = $input['role'];
@@ -243,8 +257,8 @@ function createUser() {
     try {
         checkUserExists($pdo, $userData['email'], $userData['username']);
         $stmt = $pdo->prepare("
-            INSERT INTO users (username, name, email, password, phone, role, status, provider, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'email', ?)
+            INSERT INTO users (username, name, email, password, phone, role, status, provider, created_by, front_id_card_url , back_id_card_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'email', ?, ?, ?)
         ");
         $stmt->execute([
             $userData['username'],
@@ -254,7 +268,9 @@ function createUser() {
             $userData['phone'] ?? null,
             $input_role,
             $status,
-            $user_id
+            $user_id,
+            $input['front_id_card_url'] ?? null,
+            $input['back_id_card_url'] ?? null
         ]);
 
         $newUserId = $pdo->lastInsertId();
@@ -269,9 +285,9 @@ function createUser() {
                 $stmt->execute([$newUserId, $branch_id, $user_id]);
             }
         }
-
+        $userData['id'] = $newUserId;
         createNotification($pdo, $newUserId, "Chào mừng {$userData['username']} đã tham gia hệ thống!");
-        responseJson(['status' => 'success', 'data' => ['user' => $userData]]);
+        responseJson(['status' => 'success', 'data' => $userData]);
     } catch (Exception $e) {
         error_log("Lỗi tạo người dùng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
@@ -385,6 +401,16 @@ function updateUser() {
         $params[] = sanitizeInput($input['qr_code_url']);
     }
 
+    if (isset($input['front_id_card_url'])) {
+        $updates[] = "front_id_card_url = ?";
+        $params[] = sanitizeInput($input['front_id_card_url']);
+    }
+
+    if (isset($input['back_id_card_url'])) {
+        $updates[] = "back_id_card_url = ?";
+        $params[] = sanitizeInput($input['back_id_card_url']);
+    }
+
     if (isset($input['status']) && in_array($input['status'], ['active', 'inactive', 'suspended'])) {
         $updates[] = "status = ?";
         $params[] = $input['status'];
@@ -410,7 +436,7 @@ function updateUser() {
         }
 
         // Không được tự thay đổi vai trò của chính mình
-        if ($user_id == $target_user_id) {
+        if ($user_role !== 'admin' && $user_id == $target_user_id) {
             responseJson(['status' => 'error', 'message' => 'Bạn không thể thay đổi vai trò của chính mình'], 403);
             return;
         }
@@ -800,7 +826,7 @@ function getCurrentUser() {
 
     try {
         $stmt = $pdo->prepare("
-            SELECT id, username, name, email, phone, dob, role, status, bank_details, qr_code_url
+            SELECT id, username, name, email, phone, dob, role, status, bank_details, qr_code_url, front_id_card_url , back_id_card_url
             FROM users
             WHERE id = ? AND deleted_at IS NULL
         ");
