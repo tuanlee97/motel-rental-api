@@ -1,7 +1,4 @@
 <?php
-
-
-
 function generateJWT($userId, $role) {
     $app = require __DIR__ . '/../config/app.php';
     $secret = $app['SECRET_KEY'];
@@ -59,6 +56,15 @@ function authMiddleware($requiredRoles) {
     $allowedRoles = explode(',', $requiredRoles);
     if (!in_array($user['role'], $allowedRoles)) {
         responseJson(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
+    }
+    // Check user's status in the database
+    $pdo = getDB(); // Assuming getDB() is defined in database.php
+    $stmt = $pdo->prepare("SELECT status FROM users WHERE id = ?");
+    $stmt->execute([$user['user_id']]);
+    $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$userData || $userData['status'] !== 'active') {
+        responseJson(['status' => 'error', 'message' => 'Tài khoản không hoạt động'], 401);
     }
 }
 

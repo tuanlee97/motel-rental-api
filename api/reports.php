@@ -1665,7 +1665,7 @@ function getAssignedBranchesMaintenanceReport($employeeId) {
     }
 }
 
-// Customer: Get Contracts
+// Customer: Get Contracts with Statistics
 function getCustomerContracts($customerId) {
     $pdo = getDB();
     $user = verifyJWT();
@@ -1682,6 +1682,14 @@ function getCustomerContracts($customerId) {
     $offset = ($page - 1) * $limit;
 
     $status = isset($_GET['status']) ? $_GET['status'] : null;
+    $start_date = isset($_GET['start_date']) ? $_GET['start_date'] : null;
+    $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : null;
+    $month = isset($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month']) ? $_GET['month'] : null;
+
+    if ($month && ($start_date || $end_date)) {
+        responseJson(['status' => 'error', 'message' => 'Không thể sử dụng month cùng với start_date hoặc end_date'], 400);
+        return;
+    }
 
     $conditions = ['c.user_id = ? AND c.deleted_at IS NULL'];
     $params = [$customerId];
@@ -1690,12 +1698,25 @@ function getCustomerContracts($customerId) {
         $conditions[] = 'c.status = ?';
         $params[] = $status;
     }
+    if ($month) {
+        $conditions[] = "DATE_FORMAT(c.created_at, '%Y-%m') = ?";
+        $params[] = $month;
+    } else {
+        if ($start_date && DateTime::createFromFormat('Y-m-d', $start_date)) {
+            $conditions[] = 'c.start_date >= ?';
+            $params[] = $start_date;
+        }
+        if ($end_date && DateTime::createFromFormat('Y-m-d', $end_date)) {
+            $conditions[] = 'c.end_date <= ?';
+            $params[] = $end_date;
+        }
+    }
 
     $where_clause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
 
     $query = "
         SELECT 
-            c.id, c.room_id, c.start_date, c.end_date, c.status, c.created_at, c.deposit,
+            c.id, c.room_id, c.user_id, c.start_date, c.end_date, c.status, c.created_at, c.deposit,
             r.name AS room_name, b.name AS branch_name
         FROM contracts c
         JOIN rooms r ON c.room_id = r.id
@@ -1706,7 +1727,27 @@ function getCustomerContracts($customerId) {
     ";
 
     try {
-        // Đếm tổng số hợp đồng
+        // Thống kê trạng thái hợp đồng
+        $stats_conditions = ['c.user_id = ? AND c.deleted_at IS NULL'];
+        $stats_params = [$customerId];
+        $stats_where = !empty($stats_conditions) ? 'WHERE ' . implode(' AND ', $stats_conditions) : '';
+
+        $stats_stmt = $pdo->prepare("
+            SELECT 
+                COUNT(*) AS total_contracts,
+                SUM(CASE WHEN c.status = 'active' THEN 1 ELSE 0 END) AS active_contracts,
+                SUM(CASE WHEN c.status = 'expired' THEN 1 ELSE 0 END) AS expired_contracts,
+                SUM(CASE WHEN c.status = 'ended' THEN 1 ELSE 0 END) AS ended_contracts,
+                SUM(CASE WHEN c.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_contracts
+            FROM contracts c
+            JOIN rooms r ON c.room_id = r.id
+            JOIN branches b ON r.branch_id = b.id
+            $stats_where
+        ");
+        $stats_stmt->execute($stats_params);
+        $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Đếm tổng số bản ghi
         $count_stmt = $pdo->prepare("SELECT COUNT(*) FROM contracts c JOIN rooms r ON c.room_id = r.id JOIN branches b ON r.branch_id = b.id $where_clause");
         $count_stmt->execute($params);
         $total_records = $count_stmt->fetchColumn();
@@ -1720,6 +1761,7 @@ function getCustomerContracts($customerId) {
         responseJson([
             'status' => 'success',
             'data' => [
+                'statistics' => $stats,
                 'contracts' => $contracts,
             ],
             'pagination' => [
@@ -1730,7 +1772,7 @@ function getCustomerContracts($customerId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách hợp đồng: " . $e->getMessage());
+        error_log("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

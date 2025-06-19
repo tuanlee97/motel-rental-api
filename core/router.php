@@ -98,7 +98,7 @@ function handleApiRequest($method, $uri)
         "GET:branches" => [
             "file" => "../api/branches.php",
             "handler" => "getBranches",
-            "middleware" => null,
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "POST:branches" => [
             "file" => "../api/branches.php",
@@ -129,7 +129,7 @@ function handleApiRequest($method, $uri)
         "GET:rooms" => [
             "file" => "../api/rooms.php",
             "handler" => "getRooms",
-            "middleware" => null,
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "POST:rooms" => [
             "file" => "../api/rooms.php",
@@ -139,7 +139,7 @@ function handleApiRequest($method, $uri)
         "GET:rooms/([0-9]+)" => [
             "file" => "../api/rooms.php",
             "handler" => "getRoomById",
-            "middleware" => null,
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "PUT:rooms/([0-9]+)" => [
             "file" => "../api/rooms.php",
@@ -189,7 +189,7 @@ function handleApiRequest($method, $uri)
         "GET:room_types" => [
             "file" => "../api/room_types.php",
             "handler" => "getRoomTypes",
-            "middleware" => null,
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "POST:room_types" => [
             "file" => "../api/room_types.php",
@@ -199,7 +199,7 @@ function handleApiRequest($method, $uri)
         "GET:room_types/([0-9]+)" => [
             "file" => "../api/room_types.php",
             "handler" => "getRoomTypeById",
-            "middleware" => null,
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "PUT:room_types/([0-9]+)" => [
             "file" => "../api/room_types.php",
@@ -220,7 +220,7 @@ function handleApiRequest($method, $uri)
         "GET:services" => [
             "file" => "../api/services.php",
             "handler" => "getServices",
-            "middleware" => null,
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "POST:services" => [
             "file" => "../api/services.php",
@@ -230,7 +230,7 @@ function handleApiRequest($method, $uri)
         "GET:services/([0-9]+)" => [
             "file" => "../api/services.php",
             "handler" => "getServiceById",
-            "middleware" => null,
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "PUT:services/([0-9]+)" => [
             "file" => "../api/services.php",
@@ -324,7 +324,7 @@ function handleApiRequest($method, $uri)
         "PUT:maintenance-requests/([0-9]+)" => [
             "file" => "../api/maintenance_requests.php",
             "handler" => "updateMaintenanceRequest",
-            "middleware" => "auth:admin,owner,employee",
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "DELETE:maintenance-requests/([0-9]+)" => [
             "file" => "../api/maintenance_requests.php",
@@ -376,7 +376,7 @@ function handleApiRequest($method, $uri)
         "PUT:tickets/([0-9]+)" => [
             "file" => "../api/tickets.php",
             "handler" => "updateTicket",
-            "middleware" => "auth:admin,owner,employee",
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "DELETE:tickets/([0-9]+)" => [
             "file" => "../api/tickets.php",
@@ -656,7 +656,7 @@ function handleApiRequest($method, $uri)
         "GET:config" => [
             "file" => "../api/utils/config.php",
             "handler" => "getConfig",
-            "middleware" => null,
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
     ];
 

@@ -173,8 +173,17 @@ function createBranch() {
 
     $name = sanitizeInput($input['name']);
     $address = sanitizeInput($input['address']);
-    $phone = isset($input['phone']) ? sanitizeInput($input['phone']) : null;
     $owner_id = (int)$input['owner_id'];
+    // Kiểm tra tên chi nhánh đã tồn tại cho owner_id
+    $stmt = $pdo->prepare("SELECT id FROM branches WHERE owner_id = ? AND name = ? AND deleted_at IS NULL");
+    $stmt->execute([$owner_id, $name]);
+    if ($stmt->fetch()) {
+        responseJson(['message' => 'Tên chi nhánh đã tồn tại cho chủ nhà trọ này'], 400);
+        return;
+    }
+
+    $phone = isset($input['phone']) ? sanitizeInput($input['phone']) : null;
+    
 
     // Kiểm tra định dạng số điện thoại
     if ($phone && !preg_match('/^0[0-9]{9}$/', $phone)) {

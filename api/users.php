@@ -54,6 +54,17 @@ function getUsers() {
         $params[] = $branchId;
     }
 
+    if (!empty($_GET['status'])) {
+        $statuses = array_filter(array_map('trim', explode(',', $_GET['status'])));
+        $validStatuses = ['active', 'inactive', 'suspended'];
+        $statuses = array_intersect($statuses, $validStatuses);
+        if (!empty($statuses)) {
+            $placeholders = implode(',', array_fill(0, count($statuses), '?'));
+            $conditions[] = "u.status IN ($placeholders)";
+            $params = array_merge($params, $statuses);
+        }
+    }
+
     // Tìm kiếm
     if (!empty($_GET['search'])) {
         $search = '%' . sanitizeInput($_GET['search']) . '%';
@@ -185,15 +196,29 @@ function createUser() {
     validateRequiredFields($input, ['username', 'email', 'password', 'role']);
     $userData = sanitizeUserInput($input);
 
+    // Kiểm tra username
+    if (strlen($userData['username']) < 5) {
+        responseJson(['status' => 'error', 'message' => 'Tên người dùng phải dài ít nhất 5 ký tự'], 400);
+        return;
+    }
+
     if (!isValidUsername($userData['username'])) {
-    responseJson([
-        'status' => 'error',
-        'message' => 'Tên truy cập chỉ được chứa chữ cái không dấu, số và dấu gạch dưới, không có khoảng trắng.'
-    ], 400);
-    return;
-}
+        responseJson([
+            'status' => 'error',
+            'message' => 'Tên truy cập chỉ được chứa chữ cái không dấu, số và dấu gạch dưới, không có khoảng trắng.'
+        ], 400);
+        return;
+    }
     $userData['email'] = validateEmail($userData['email']);
+
+    // Kiểm tra password
+    if (strlen($input['password']) < 6) {
+        responseJson(['status' => 'error', 'message' => 'Mật khẩu phải dài ít nhất 6 ký tự'], 400);
+        return;
+    }
+
     $password = password_hash($input['password'], PASSWORD_DEFAULT);
+
     $input_role = $input['role'];
     $status = $input_role === 'customer' ? 'active' : ($input['status'] ?? 'inactive');
 
@@ -358,6 +383,17 @@ function updateUser() {
 
     // Xử lý các trường người dùng được phép cập nhật
     if (isset($input['username']) && !empty(trim($input['username']))) {
+        if (strlen($userData['username']) < 5) {
+            responseJson(['status' => 'error', 'message' => 'Tên người dùng phải dài ít nhất 5 ký tự'], 400);
+            return;
+        }
+        if (!isValidUsername($userData['username'])) {
+            responseJson([
+                'status' => 'error',
+                'message' => 'Tên truy cập chỉ được chứa chữ cái không dấu, số và dấu gạch dưới, không có khoảng trắng.'
+            ], 400);
+            return;
+        }
         $updates[] = "username = ?";
         $params[] = $userData['username'];
     } elseif (isset($input['username'])) {
@@ -608,6 +644,17 @@ function patchUser() {
 
         if (!empty($input['username'])) {
             $username = sanitizeInput($input['username']);
+            if (strlen($username) < 5) {
+                responseJson(['status' => 'error', 'message' => 'Tên người dùng phải dài ít nhất 5 ký tự'], 400);
+                return;
+            }
+            if (!isValidUsername($username)) {
+                responseJson([
+                    'status' => 'error',
+                    'message' => 'Tên truy cập chỉ được chứa chữ cái không dấu, số và dấu gạch dưới, không có khoảng trắng.'
+                ], 400);
+                return;
+            }
             checkUserExists($pdo, null, $username, $target_user_id);
             $updates[] = "username = ?";
             $params[] = $username;
@@ -619,6 +666,10 @@ function patchUser() {
             $params[] = $email;
         }
         if (!empty($input['password'])) {
+            if (strlen($input['password']) < 6) {
+                responseJson(['status' => 'error', 'message' => 'Mật khẩu phải dài ít nhất 6 ký tự'], 400);
+                return;
+            }
             $updates[] = "password = ?";
             $params[] = password_hash($input['password'], PASSWORD_DEFAULT);
         }
@@ -743,7 +794,29 @@ function registerUser() {
     $input = json_decode(file_get_contents('php://input'), true);
     validateRequiredFields($input, ['username', 'email', 'password']);
     $userData = sanitizeUserInput($input);
+
+    // Kiểm tra email
     $userData['email'] = validateEmail($userData['email']);
+
+    // Kiểm tra username
+    if (strlen($userData['username']) < 5) {
+        responseJson(['status' => 'error', 'message' => 'Tên người dùng phải dài ít nhất 5 ký tự'], 400);
+        return;
+    }
+    if (!isValidUsername($userData['username'])) {
+        responseJson([
+            'status' => 'error',
+            'message' => 'Tên truy cập chỉ được chứa chữ cái không dấu, số và dấu gạch dưới, không có khoảng trắng.'
+        ], 400);
+        return;
+    }
+
+    // Kiểm tra password
+    if (strlen($input['password']) < 6) {
+        responseJson(['status' => 'error', 'message' => 'Mật khẩu phải dài ít nhất 6 ký tự'], 400);
+        return;
+    }
+
     $password = password_hash($input['password'], PASSWORD_DEFAULT);
 
     try {
@@ -778,6 +851,7 @@ function registerGoogleUser() {
     $input = json_decode(file_get_contents('php://input'), true);
     validateRequiredFields($input, ['token']);
     $googleData = verifyGoogleToken($input['token']);
+
     if (!$googleData) {
         responseJson(['status' => 'error', 'message' => 'Token Google không hợp lệ'], 401);
         return;
@@ -961,8 +1035,8 @@ function resetPassword() {
     $token = trim($input['token']);
     $password = trim($input['password']);
 
-    if (strlen($password) < 8) {
-        responseJson(['status' => 'error', 'message' => 'Mật khẩu phải có ít nhất 8 ký tự'], 400);
+    if (strlen($password) < 6) {
+        responseJson(['status' => 'error', 'message' => 'Mật khẩu phải có ít nhất 6 ký tự'], 400);
         return;
     }
 
