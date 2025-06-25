@@ -99,7 +99,7 @@ function getBranches() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách chi nhánh: " . $e->getMessage());
+        logError("Lỗi lấy danh sách chi nhánh: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

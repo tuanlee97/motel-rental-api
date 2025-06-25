@@ -65,7 +65,7 @@ function getServices() {
         $stmt->execute($params);
         $services = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
-        error_log("Database Error: " . $e->getMessage());
+        logError("Database Error: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
         return;
     }
@@ -124,7 +124,7 @@ function getServiceById() {
 
         responseJson(['data' => $service, 'message' => 'Lấy dịch vụ thành công']);
     } catch (PDOException $e) {
-        error_log("Error fetching service ID $service_id: " . $e->getMessage());
+        logError("Error fetching service ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -188,7 +188,7 @@ function createService() {
         createNotification($pdo, $branch['owner_id'], "Dịch vụ '$name' đã được thêm vào chi nhánh ID $branch_id.");
         responseJson(['data' => ['id' => $service_id], 'message' => 'Tạo dịch vụ thành công'], 201);
     } catch (PDOException $e) {
-        error_log("Error creating service: " . $e->getMessage());
+        logError("Error creating service: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -291,7 +291,7 @@ function updateService() {
         createNotification($pdo, $service['owner_id'], "Dịch vụ ID $service_id đã được cập nhật.");
         responseJson(['data' => ['id' => $service_id], 'message' => 'Cập nhật dịch vụ thành công']);
     } catch (PDOException $e) {
-        error_log("Error updating service ID $service_id: " . $e->getMessage());
+        logError("Error updating service ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -333,7 +333,7 @@ function deleteService() {
         createNotification($pdo, $service['owner_id'], "Dịch vụ ID $service_id đã được xóa mềm.");
         responseJson(['data' => ['id' => $service_id], 'message' => 'Xóa dịch vụ thành công']);
     } catch (PDOException $e) {
-        error_log("Error deleting service ID $service_id: " . $e->getMessage());
+        logError("Error deleting service ID $service_id: " . $e->getMessage());
         responseJson(['message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

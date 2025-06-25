@@ -81,7 +81,7 @@ function createMaintenanceRequest() {
             'data' => $maintenance_request
         ], 201);
     } catch (PDOException $e) {
-        error_log("Lỗi tạo yêu cầu bảo trì: " . $e->getMessage());
+        logError("Lỗi tạo yêu cầu bảo trì: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -178,7 +178,7 @@ function getCustomerMaintenanceRequests($userId) {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách yêu cầu bảo trì: " . $e->getMessage());
+        logError("Lỗi lấy danh sách yêu cầu bảo trì: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -313,7 +313,7 @@ function getAllMaintenanceRequests() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách yêu cầu bảo trì: " . $e->getMessage());
+        logError("Lỗi lấy danh sách yêu cầu bảo trì: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -435,7 +435,7 @@ function updateMaintenanceRequest($id) {
 
         responseJson(['status' => 'success', 'message' => 'Cập nhật yêu cầu bảo trì thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi cập nhật yêu cầu bảo trì: " . $e->getMessage());
+        logError("Lỗi cập nhật yêu cầu bảo trì: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -462,7 +462,7 @@ function deleteMaintenanceRequest($id) {
 
         responseJson(['status' => 'success', 'message' => 'Xóa yêu cầu bảo trì thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi xóa yêu cầu bảo trì: " . $e->getMessage());
+        logError("Lỗi xóa yêu cầu bảo trì: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

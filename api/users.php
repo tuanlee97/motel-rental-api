@@ -180,7 +180,7 @@ function getUsers() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi cơ sở dữ liệu: " . $e->getMessage());
+        logError("Lỗi cơ sở dữ liệu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
         return;
     }
@@ -314,7 +314,7 @@ function createUser() {
         createNotification($pdo, $newUserId, "Chào mừng {$userData['username']} đã tham gia hệ thống!");
         responseJson(['status' => 'success', 'data' => $userData]);
     } catch (Exception $e) {
-        error_log("Lỗi tạo người dùng: " . $e->getMessage());
+        logError("Lỗi tạo người dùng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -599,8 +599,8 @@ function updateUser() {
         if (!empty($updates)) {
             $query = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ? AND deleted_at IS NULL";
             $params[] = $target_user_id;
-            error_log("Cập nhật người dùng ID $target_user_id với dữ liệu: " . json_encode($params));
-            error_log("Truy vấn: $query");
+            logError("Cập nhật người dùng ID $target_user_id với dữ liệu: " . json_encode($params));
+            logError("Truy vấn: $query");
             $stmt = $pdo->prepare($query);
             $stmt->execute($params);
         }
@@ -609,7 +609,7 @@ function updateUser() {
         createNotification($pdo, $target_user_id, "Thông tin tài khoản $username đã được cập nhật.");
         responseJson(['status' => 'success', 'data' => ['user' => $userData,'message' => 'Cập nhật thông tin thành công']]);
     } catch (Exception $e) {
-        error_log("Lỗi cập nhật người dùng ID $target_user_id: " . $e->getMessage());
+        logError("Lỗi cập nhật người dùng ID $target_user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -630,7 +630,7 @@ function patchUser() {
         checkResourceExists($pdo, 'users', $target_user_id);
         $input = json_decode(file_get_contents('php://input'), true);
         if (empty($input) && json_last_error() !== JSON_ERROR_NONE) {
-            error_log("JSON decode error: " . json_last_error_msg());
+            logError("JSON decode error: " . json_last_error_msg());
             responseJson(['status' => 'error', 'message' => 'Invalid JSON format'], 400);
             return;
         }
@@ -723,7 +723,7 @@ function patchUser() {
         createNotification($pdo, $target_user_id, "Thông tin tài khoản $username đã được cập nhật.");
         responseJson(['status' => 'success', 'message' => 'Cập nhật thông tin thành công']);
     } catch (Exception $e) {
-        error_log("Lỗi patch người dùng ID $target_user_id: " . $e->getMessage());
+        logError("Lỗi patch người dùng ID $target_user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -784,7 +784,7 @@ function deleteUser() {
         $stmt->execute([$target_user_id]);
         responseJson(['status' => 'success', 'message' => 'Xóa người dùng thành công']);
     } catch (Exception $e) {
-        error_log("Lỗi xóa người dùng ID $target_user_id: " . $e->getMessage());
+        logError("Lỗi xóa người dùng ID $target_user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -841,7 +841,7 @@ function registerUser() {
         createNotification($pdo, $userId, "Chào mừng {$userData['username']} đã đăng ký!");
         responseJson(['status' => 'success', 'data' => ['user' => $userData, 'token' => $jwt['token']]]);
     } catch (Exception $e) {
-        error_log("Lỗi đăng ký người dùng: " . $e->getMessage());
+        logError("Lỗi đăng ký người dùng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -888,7 +888,7 @@ function registerGoogleUser() {
         createNotification($pdo, $userId, "Chào mừng $username đã đăng ký qua Google!");
         responseJson(['status' => 'success', 'data' => ['token' => $jwt['token'], 'user' => ['id' => $userId, 'username' => $username]]]);
     } catch (Exception $e) {
-        error_log("Lỗi đăng ký Google user: " . $e->getMessage());
+        logError("Lỗi đăng ký Google user: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -919,7 +919,7 @@ function getCurrentUser() {
             'user' => $userData
         ]]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy thông tin người dùng ID $user_id: " . $e->getMessage());
+        logError("Lỗi lấy thông tin người dùng ID $user_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -932,7 +932,7 @@ function sendResetPasswordEmail($email, $resetLink) {
     try {
         // Kiểm tra cấu hình SMTP
         if (!isset($appConfig['SMTP_HOST']) || !isset($appConfig['SMTP_USERNAME']) || !isset($appConfig['SMTP_PASSWORD'])) {
-            error_log("Cấu hình SMTP không đầy đủ");
+            logError("Cấu hình SMTP không đầy đủ");
             return false;
         }
 
@@ -962,7 +962,7 @@ function sendResetPasswordEmail($email, $resetLink) {
         $mail->send();
         return true;
     } catch (Exception $e) {
-        error_log("Lỗi gửi email: {$mail->ErrorInfo}");
+        logError("Lỗi gửi email: {$mail->ErrorInfo}");
         return false;
     }
 }
@@ -999,7 +999,7 @@ function forgotPassword() {
         $stmt->execute([$email, $token, $expires_at]);
 
         if (!is_array($appConfig) || !isset($appConfig['FRONTEND_URL'])) {
-            error_log("Lỗi: Không tìm thấy FRONTEND_URL trong appConfig");
+            logError("Lỗi: Không tìm thấy FRONTEND_URL trong appConfig");
             responseJson(['status' => 'error', 'message' => 'Lỗi cấu hình hệ thống'], 500);
             return;
         }
@@ -1013,10 +1013,10 @@ function forgotPassword() {
 
         responseJson(['status' => 'success', 'message' => 'Liên kết đặt lại mật khẩu đã được gửi đến email của bạn'], 200);
     } catch (PDOException $e) {
-        error_log("Lỗi xử lý yêu cầu quên mật khẩu: " . $e->getMessage());
+        logError("Lỗi xử lý yêu cầu quên mật khẩu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     } catch (Exception $e) {
-        error_log("Lỗi xử lý yêu cầu quên mật khẩu: " . $e->getMessage());
+        logError("Lỗi xử lý yêu cầu quên mật khẩu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi hệ thống'], 500);
     }
 }
@@ -1059,10 +1059,10 @@ function resetPassword() {
 
         responseJson(['status' => 'success', 'message' => 'Mật khẩu đã được đặt lại thành công'], 200);
     } catch (PDOException $e) {
-        error_log("Lỗi đặt lại mật khẩu: " . $e->getMessage());
+        logError("Lỗi đặt lại mật khẩu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     } catch (Exception $e) {
-        error_log("Lỗi đặt lại mật khẩu: " . $e->getMessage());
+        logError("Lỗi đặt lại mật khẩu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi hệ thống'], 500);
     }
 }

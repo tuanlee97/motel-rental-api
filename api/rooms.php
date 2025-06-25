@@ -164,7 +164,7 @@ function getRooms() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách phòng: " . $e->getMessage());
+        logError("Lỗi lấy danh sách phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -181,7 +181,7 @@ function createRoom() {
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
-    error_log("Input data: " . json_encode($input));
+    logError("Input data: " . json_encode($input));
     validateRequiredFields($input, ['branch_id', 'type_id', 'name']);
     $data = sanitizeInput($input);
     if ($input['price'] > 99999999.99) {
@@ -203,7 +203,7 @@ function createRoom() {
         $stmt->execute([$data['branch_id'], $data['type_id'], $data['name'], $data['price'] ?? 0]);
         responseJson(['status' => 'success', 'message' => 'Tạo phòng thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi tạo phòng: " . $e->getMessage());
+        logError("Lỗi tạo phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -224,7 +224,7 @@ function updateRoom() {
 
     // Lấy dữ liệu đầu vào từ request
     $input = json_decode(file_get_contents('php://input'), true);
-    error_log("Input data: " . json_encode($input));
+    logError("Input data: " . json_encode($input));
 
     // Xác định các trường bắt buộc và tùy chọn
     $requiredFields = [];
@@ -303,7 +303,7 @@ function updateRoom() {
 
         responseJson(['status' => 'success', 'message' => 'Cập nhật phòng thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi cập nhật phòng ID $room_id: " . $e->getMessage());
+        logError("Lỗi cập nhật phòng ID $room_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -380,7 +380,7 @@ function deleteRoom() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi xóa mềm phòng ID $room_id: " . $e->getMessage());
+        logError("Lỗi xóa mềm phòng ID $room_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -576,7 +576,7 @@ function changeRoom() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi đổi phòng (contract ID $contract_id): " . $e->getMessage());
+        logError("Lỗi đổi phòng (contract ID $contract_id): " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

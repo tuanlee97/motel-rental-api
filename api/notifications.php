@@ -139,7 +139,7 @@ function createNotification($pdo, $user_id, $message) {
         $notification_id = $pdo->lastInsertId();
         responseJson(['status' => 'success', 'data' => ['notification_id' => $notification_id]]);
     } catch (Exception $e) {
-        error_log("Lỗi tạo notification: " . $e->getMessage());
+        logError("Lỗi tạo notification: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }

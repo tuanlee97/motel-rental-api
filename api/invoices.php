@@ -111,7 +111,7 @@ function getInvoices() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách hóa đơn: " . $e->getMessage());
+        logError("Lỗi lấy danh sách hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -276,7 +276,7 @@ function createInvoice() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi tạo hóa đơn: " . $e->getMessage());
+        logError("Lỗi tạo hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -345,7 +345,7 @@ function getInvoiceById($invoice_id) {
             'data' => $invoice
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy hóa đơn: " . $e->getMessage());
+        logError("Lỗi lấy hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -448,7 +448,7 @@ function getInvoiceDetails($invoice_id) {
         if (!empty($invoice['qr_code_url'])) {
             // Lấy tên tệp từ URL
             $filename = basename($invoice['qr_code_url']);
-            error_log("QR code filename: $filename");
+            logError("QR code filename: $filename");
             $imagePath = __DIR__ . '/../uploads/qr_codes/' . $filename;
             
             if (file_exists($imagePath)) {
@@ -460,11 +460,11 @@ function getInvoiceDetails($invoice_id) {
                     $invoice['qr_code_url'] = $base64; // Thay URL bằng chuỗi base64
                 } else {
                     $invoice['qr_code_url'] = ''; // Nếu không đọc được tệp
-                    error_log("Failed to read QR code image: $imagePath");
+                    logError("Failed to read QR code image: $imagePath");
                 }
             } else {
                 $invoice['qr_code_url'] = ''; // Nếu tệp không tồn tại
-                error_log("QR code image not found: $imagePath");
+                logError("QR code image not found: $imagePath");
             }
         }
 
@@ -491,7 +491,7 @@ function getInvoiceDetails($invoice_id) {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy chi tiết hóa đơn: " . $e->getMessage());
+        logError("Lỗi lấy chi tiết hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -670,7 +670,7 @@ function createBulkInvoices() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi tạo hóa đơn: " . $e->getMessage());
+        logError("Lỗi tạo hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -847,7 +847,7 @@ function updateInvoice($invoice_id) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi cập nhật hóa đơn: " . $e->getMessage());
+        logError("Lỗi cập nhật hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -963,7 +963,7 @@ function patchInvoice($invoice_id) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi cập nhật hóa đơn: " . $e->getMessage());
+        logError("Lỗi cập nhật hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1027,7 +1027,7 @@ function deleteInvoice($invoice_id) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi xóa hóa đơn: " . $e->getMessage());
+        logError("Lỗi xóa hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

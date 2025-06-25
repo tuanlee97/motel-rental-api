@@ -62,10 +62,10 @@ function createRoomOccupant() {
 
         responseJson(['status'=>'success', 'message' => 'Thêm người ở cùng thành công']);
     } catch (PDOException $e) {
-        error_log("DB Error: " . $e->getMessage());
+        logError("DB Error: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     } catch (Exception $e) {
-        error_log("Unhandled Error: " . $e->getMessage());
+        logError("Unhandled Error: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi không xác định'], 500);
     }
 }
@@ -115,7 +115,7 @@ function getOccupantsByRoom() {
         ]);
     } catch (PDOException $e) {
         // Xử lý lỗi
-        error_log("Lỗi lấy danh sách occupants cho phòng ID $room_id: " . $e->getMessage());
+        logError("Lỗi lấy danh sách occupants cho phòng ID $room_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -153,7 +153,7 @@ function deleteRoomOccupant($occupant_id) {
 
         responseJson(['status' => 'success', 'message' => 'Xóa người ở cùng thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi xóa người ở cùng ID $occupant_id: " . $e->getMessage());
+        logError("Lỗi xóa người ở cùng ID $occupant_id: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -257,13 +257,13 @@ function updateRoomOccupants() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi cập nhật danh sách occupants cho phòng ID $roomId: " . $e->getMessage());
+        logError("Lỗi cập nhật danh sách occupants cho phòng ID $roomId: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi không xác định: " . $e->getMessage());
+        logError("Lỗi không xác định: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi không xác định'], 500);
     }
 }

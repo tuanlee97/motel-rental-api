@@ -85,11 +85,11 @@ function getRoomTypes() {
         ]);
     } catch (PDOException $e) {
         $errorMsg = "Lỗi lấy danh sách loại phòng: " . $e->getMessage();
-        error_log($errorMsg);
+        logError($errorMsg);
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     } catch (Exception $e) {
         $errorMsg = "Lỗi không xác định: " . $e->getMessage();
-        error_log($errorMsg);
+        logError($errorMsg);
         responseJson(['status' => 'error', 'message' => 'Lỗi hệ thống'], 500);
     }
 }
@@ -134,7 +134,7 @@ function getRoomTypeById($id) {
         responseJson(['status' => 'success', 'data' => $roomType]);
     } catch (PDOException $e) {
         $errorMsg = "Lỗi lấy thông tin loại phòng: " . $e->getMessage();
-        error_log($errorMsg);
+        logError($errorMsg);
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     }
 }
@@ -152,7 +152,7 @@ function createRoomType() {
         $role = $user['role'];
 
         if ($role !== 'admin' && $role !== 'owner') {
-            error_log("Không có quyền tạo loại phòng");
+            logError("Không có quyền tạo loại phòng");
             responseJson(['status' => 'error', 'message' => 'Không có quyền tạo loại phòng'], 403);
             return;
         }
@@ -185,7 +185,7 @@ function createRoomType() {
         responseJson(['status' => 'success', 'message' => 'Tạo loại phòng thành công']);
     } catch (PDOException $e) {
         $errorMsg = "Lỗi tạo loại phòng: " . $e->getMessage();
-        error_log($errorMsg);
+        logError($errorMsg);
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     }
 }
@@ -196,7 +196,7 @@ function updateRoomType($id) {
         $pdo = getDB();
         $user = verifyJWT();
         if (!$user) {
-            error_log("Lỗi xác thực JWT");
+            logError("Lỗi xác thực JWT");
             responseJson(['status' => 'error', 'message' => 'Không xác thực được người dùng'], 401);
             return;
         }
@@ -204,7 +204,7 @@ function updateRoomType($id) {
         $role = $user['role'];
 
         if ($role !== 'admin' && $role !== 'owner') {
-            error_log("Không có quyền cập nhật loại phòng");
+            logError("Không có quyền cập nhật loại phòng");
             responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật loại phòng'], 403);
             return;
         }
@@ -221,7 +221,7 @@ function updateRoomType($id) {
             $stmt = $pdo->prepare("SELECT 1 FROM branches WHERE id = ? AND owner_id = ? AND deleted_at IS NULL");
             $stmt->execute([$branch_id, $user_id]);
             if (!$stmt->fetch()) {
-                error_log("Owner không có quyền cho branch_id: $branch_id");
+                logError("Owner không có quyền cho branch_id: $branch_id");
                 responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật loại phòng cho chi nhánh này'], 403);
                 return;
             }
@@ -233,7 +233,7 @@ function updateRoomType($id) {
         $stmt = $pdo->prepare("SELECT 1 FROM room_types WHERE id = ? AND deleted_at IS NULL");
         $stmt->execute([$id]);
         if (!$stmt->fetch()) {
-            error_log("Loại phòng không tồn tại, ID: $id");
+            logError("Loại phòng không tồn tại, ID: $id");
             responseJson(['status' => 'error', 'message' => 'Loại phòng không tồn tại'], 404);
             return;
         }
@@ -247,7 +247,7 @@ function updateRoomType($id) {
         responseJson(['status' => 'success', 'message' => 'Cập nhật loại phòng thành công']);
     } catch (PDOException $e) {
         $errorMsg = "Lỗi cập nhật loại phòng: " . $e->getMessage();
-        error_log($errorMsg);
+        logError($errorMsg);
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     }
 }
@@ -266,7 +266,7 @@ function patchRoomType($id) {
  
 
         if ($role !== 'admin' && $role !== 'owner') {
-            error_log("Không có quyền cập nhật loại phòng");
+            logError("Không có quyền cập nhật loại phòng");
             responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật loại phòng'], 403);
             return;
         }
@@ -274,7 +274,7 @@ function patchRoomType($id) {
         $input = json_decode(file_get_contents('php://input'), true);
 
         if (empty($input) || !is_array($input)) {
-            error_log("Dữ liệu đầu vào không hợp lệ");
+            logError("Dữ liệu đầu vào không hợp lệ");
             responseJson(['status' => 'error', 'message' => 'Dữ liệu đầu vào không hợp lệ'], 400);
             return;
         }
@@ -349,7 +349,7 @@ function patchRoomType($id) {
         responseJson(['status' => 'success', 'message' => 'Cập nhật loại phòng thành công']);
     } catch (PDOException $e) {
         $errorMsg = "Lỗi cập nhật loại phòng một phần: " . $e->getMessage();
-        error_log($errorMsg);
+        logError($errorMsg);
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     }
 }
@@ -404,7 +404,7 @@ function deleteRoomType($id) {
 
         responseJson(['status' => 'success', 'message' => 'Xóa loại phòng thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi xóa loại phòng: " . $e->getMessage());
+        logError("Lỗi xóa loại phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

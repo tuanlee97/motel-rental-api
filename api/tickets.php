@@ -93,7 +93,7 @@ function createTicket() {
             'data' => $ticket
         ], 201);
     } catch (PDOException $e) {
-        error_log("Lỗi tạo ticket: " . $e->getMessage());
+        logError("Lỗi tạo ticket: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -198,7 +198,7 @@ function getCustomerTickets($userId) {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách ticket: " . $e->getMessage());
+        logError("Lỗi lấy danh sách ticket: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -342,7 +342,7 @@ function getAllTickets() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách ticket: " . $e->getMessage());
+        logError("Lỗi lấy danh sách ticket: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -475,7 +475,7 @@ function updateTicket($id) {
 
         responseJson(['status' => 'success', 'message' => 'Cập nhật ticket thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi cập nhật ticket: " . $e->getMessage());
+        logError("Lỗi cập nhật ticket: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -502,7 +502,7 @@ function deleteTicket($id) {
 
         responseJson(['status' => 'success', 'message' => 'Xóa ticket thành công']);
     } catch (PDOException $e) {
-        error_log("Lỗi xóa ticket: " . $e->getMessage());
+        logError("Lỗi xóa ticket: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

@@ -60,7 +60,7 @@ function uploadQrCode() {
     $upload_dir = __DIR__ . '/../uploads/qr_codes/';
     if (!file_exists($upload_dir)) {
         if (!mkdir($upload_dir, 0755, true)) {
-            error_log("Failed to create directory: $upload_dir");
+            logError("Failed to create directory: $upload_dir");
             responseJson(['status' => 'error', 'message' => 'Không thể tạo thư mục lưu trữ'], 500);
             return;
         }
@@ -68,7 +68,7 @@ function uploadQrCode() {
 
     // Kiểm tra quyền ghi thư mục
     if (!is_writable($upload_dir)) {
-        error_log("Directory not writable: $upload_dir");
+        logError("Directory not writable: $upload_dir");
         responseJson(['status' => 'error', 'message' => 'Thư mục lưu trữ không có quyền ghi'], 500);
         return;
     }
@@ -89,7 +89,7 @@ function uploadQrCode() {
             $stmt = $pdo->prepare("UPDATE users SET qr_code_url = ? WHERE id = ?");
             $stmt->execute([$file_url, $user_id]);
         } catch (PDOException $e) {
-            error_log("Database error: " . $e->getMessage());
+            logError("Database error: " . $e->getMessage());
             unlink($target_file);
             responseJson(['status' => 'error', 'message' => 'Lỗi cập nhật cơ sở dữ liệu'], 500);
             return;
@@ -101,7 +101,7 @@ function uploadQrCode() {
             'data' => ['url' => $file_url]
         ]);
     } else {
-        error_log("Failed to move uploaded file from $file_tmp to $target_file");
+        logError("Failed to move uploaded file from $file_tmp to $target_file");
         responseJson(['status' => 'error', 'message' => 'Lỗi di chuyển file'], 500);
     }
 }
@@ -178,7 +178,7 @@ function uploadIdCard() {
             $target_username = $target_user['username'];
         }
     } catch (PDOException $e) {
-        error_log("Database error during permission check: " . $e->getMessage());
+        logError("Database error during permission check: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi kiểm tra quyền truy cập'], 500);
         return;
     }
@@ -203,14 +203,14 @@ function uploadIdCard() {
 
     if (!file_exists($upload_dir)) {
         if (!mkdir($upload_dir, 0755, true)) {
-            error_log("Failed to create directory: $upload_dir");
+            logError("Failed to create directory: $upload_dir");
             responseJson(['status' => 'error', 'message' => 'Không thể tạo thư mục lưu trữ'], 500);
             return;
         }
     }
 
     if (!is_writable($upload_dir)) {
-        error_log("Directory not writable: $upload_dir");
+        logError("Directory not writable: $upload_dir");
         responseJson(['status' => 'error', 'message' => 'Thư mục lưu trữ không có quyền ghi'], 500);
         return;
     }
@@ -226,7 +226,7 @@ function uploadIdCard() {
         $file_urls['front_id_card'] = $current_urls['front_id_card_url'] ?? null;
         $file_urls['back_id_card'] = $current_urls['back_id_card_url'] ?? null;
     } catch (PDOException $e) {
-        error_log("Database error: " . $e->getMessage());
+        logError("Database error: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi truy vấn cơ sở dữ liệu'], 500);
         return;
     }
@@ -269,7 +269,7 @@ function uploadIdCard() {
         $target_file = $upload_dir . $unique_name;
 
         if (!move_uploaded_file($file_tmp, $target_file)) {
-            error_log("Failed to move uploaded file from $file_tmp to $target_file");
+            logError("Failed to move uploaded file from $file_tmp to $target_file");
             responseJson(['status' => 'error', 'message' => 'Lỗi di chuyển file'], 500);
             return;
         }
@@ -287,7 +287,7 @@ function uploadIdCard() {
         // Gửi thông báo cho người dùng được cập nhật CCCD
         createNotification($pdo, $target_user_id, "Ảnh CCCD đã được cập nhật bởi $role (ID: $user_id).");
     } catch (PDOException $e) {
-        error_log("Database error: " . $e->getMessage());
+        logError("Database error: " . $e->getMessage());
         foreach ($uploaded_files as $file) {
             unlink($file);
         }
@@ -374,7 +374,7 @@ function deleteIdCard() {
             }
         }
     } catch (PDOException $e) {
-        error_log("Database error during permission check: " . $e->getMessage());
+        logError("Database error during permission check: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi kiểm tra quyền truy cập'], 500);
         return;
     }
@@ -398,23 +398,23 @@ function deleteIdCard() {
         $file_path = realpath(__DIR__ . '/../' . ltrim($parsed_path, '/'));
         if ($file_path && file_exists($file_path)) {
             if (!unlink($file_path)) {
-                error_log("Failed to delete file: $file_path");
+                logError("Failed to delete file: $file_path");
                 responseJson(['status' => 'error', 'message' => 'Lỗi xóa file'], 500);
                 return;
             }
-            error_log("Deleted file: $file_path");
+            logError("Deleted file: $file_path");
         } else {
-            error_log("File does not exist: $file_path (URL: $current_url)");
+            logError("File does not exist: $file_path (URL: $current_url)");
         }
 
         // Cập nhật cơ sở dữ liệu
         $stmt = $pdo->prepare("UPDATE users SET $column = NULL WHERE id = ?");
         $stmt->execute([$target_user_id]);
         $affected_rows = $stmt->rowCount();
-        error_log("UPDATE users SET $column = NULL WHERE id = $target_user_id; Affected rows: $affected_rows");
+        logError("UPDATE users SET $column = NULL WHERE id = $target_user_id; Affected rows: $affected_rows");
 
         if ($affected_rows === 0) {
-            error_log("No rows updated for user_id: $target_user_id");
+            logError("No rows updated for user_id: $target_user_id");
             responseJson(['status' => 'error', 'message' => 'Không thể cập nhật cơ sở dữ liệu'], 500);
             return;
         }
@@ -427,7 +427,7 @@ function deleteIdCard() {
             'message' => "Xóa ảnh mặt $side CCCD thành công"
         ]);
     } catch (PDOException $e) {
-        error_log("Database error: " . $e->getMessage());
+        logError("Database error: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cập nhật cơ sở dữ liệu: ' . $e->getMessage()], 500);
         return;
     }

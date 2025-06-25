@@ -128,7 +128,7 @@ function getAllBranchesRevenueReport() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo doanh thu: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo doanh thu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -235,7 +235,7 @@ function getAllBranchesRoomStatusReport() {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo tình trạng phòng: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo tình trạng phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -367,7 +367,7 @@ function getAllBranchesContractReport() {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -486,7 +486,7 @@ function getAllBranchesUtilityUsageReport() {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo sử dụng tiện ích: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo sử dụng tiện ích: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -601,7 +601,7 @@ function getAllBranchesMaintenanceReport() {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo yêu cầu bảo trì: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo yêu cầu bảo trì: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -718,7 +718,7 @@ function getRevenueReport($branchId) {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo doanh thu: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo doanh thu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -808,7 +808,7 @@ function getRoomStatusReport($branchId) {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo tình trạng phòng: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo tình trạng phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -923,7 +923,7 @@ function getContractReport($branchId) {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1017,7 +1017,7 @@ function getUtilityUsageReport($branchId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo sử dụng tiện ích: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo sử dụng tiện ích: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1109,7 +1109,7 @@ function getMaintenanceReport($branchId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo yêu cầu bảo trì: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo yêu cầu bảo trì: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1231,7 +1231,7 @@ function getAssignedBranchesRevenueReport($employeeId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo doanh thu: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo doanh thu: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1329,7 +1329,7 @@ function getAssignedBranchesRoomStatusReport($employeeId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo tình trạng phòng: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo tình trạng phòng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1451,7 +1451,7 @@ function getAssignedBranchesContractReport($employeeId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1554,7 +1554,7 @@ function getAssignedBranchesUtilityUsageReport($employeeId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo sử dụng tiện ích: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo sử dụng tiện ích: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1660,7 +1660,7 @@ function getAssignedBranchesMaintenanceReport($employeeId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo yêu cầu bảo trì: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo yêu cầu bảo trì: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1772,7 +1772,7 @@ function getCustomerContracts($customerId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1871,7 +1871,7 @@ function getCustomerInvoices($customerId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách hóa đơn: " . $e->getMessage());
+        logError("Lỗi lấy danh sách hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1968,7 +1968,7 @@ function getCustomerUtilityUsage($customerId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy báo cáo sử dụng tiện ích: " . $e->getMessage());
+        logError("Lỗi lấy báo cáo sử dụng tiện ích: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -2025,7 +2025,7 @@ function getCustomerInvoiceDetails($customerId, $invoiceId) {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy chi tiết hóa đơn: " . $e->getMessage());
+        logError("Lỗi lấy chi tiết hóa đơn: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -2095,7 +2095,7 @@ function getAllBranches() {
             ],
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách chi nhánh: " . $e->getMessage());
+        logError("Lỗi lấy danh sách chi nhánh: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

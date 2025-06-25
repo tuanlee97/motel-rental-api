@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS branches (
     address TEXT NOT NULL,
     phone VARCHAR(15),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL DEFAULT NULL,  -- Trường xóa mềm
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_branches_owner_id (owner_id),

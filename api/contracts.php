@@ -135,7 +135,7 @@ function getContracts() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách hợp đồng: " . $e->getMessage());
+        logError("Lỗi lấy danh sách hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -238,7 +238,7 @@ function createContract() {
         createNotification($pdo, $data['user_id'], "Hợp đồng thuê phòng ID $contractId đã được tạo.");
         responseJson(['status' => 'success', 'message' => 'Tạo hợp đồng thành công', 'data' => ['id' => $contractId]]);
     } catch (PDOException $e) {
-        error_log("Lỗi tạo hợp đồng: " . $e->getMessage());
+        logError("Lỗi tạo hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -355,7 +355,7 @@ function updateContract() {
         // Trả về kết quả thành công
         responseJson(['status' => 'success', 'message' => 'Cập nhật hợp đồng thành công', 'data' => $data]);
     } catch (PDOException $e) {
-        error_log("Lỗi cập nhật hợp đồng: " . $e->getMessage());
+        logError("Lỗi cập nhật hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -436,7 +436,7 @@ function deleteContract() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi xóa hợp đồng: " . $e->getMessage());
+        logError("Lỗi xóa hợp đồng: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -460,7 +460,7 @@ function deleteContractById($contract) {
         $stmt->execute([$contract_id]);
 
     } catch (PDOException $e) {
-        error_log("Lỗi xóa hợp đồng ID $contract_id: " . $e->getMessage());
+        logError("Lỗi xóa hợp đồng ID $contract_id: " . $e->getMessage());
     }
 }
 
@@ -615,7 +615,7 @@ function endContract() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi kết thúc hợp đồng (contract ID $contract_id): " . $e->getMessage());
+        logError("Lỗi kết thúc hợp đồng (contract ID $contract_id): " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }

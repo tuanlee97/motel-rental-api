@@ -35,7 +35,7 @@ function login() {
         createNotification($pdo, $user['id'], "Chào mừng {$user['username']} đã đăng nhập!");
         responseJson(['status' => 'success', 'data' => ['token' => $token, 'user' => $user]]);
     } catch (Exception $e) {
-        error_log('Lỗi đăng nhập: ' . $e->getMessage());
+        logError('Lỗi đăng nhập: ' . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }
@@ -52,7 +52,7 @@ function logout() {
         $stmt->execute([$token, $decoded['exp']]);
         responseJson(['status' => 'success', 'message' => 'Đăng xuất thành công']);
     } catch (Exception $e) {
-        error_log('Lỗi đăng xuất: ' . $e->getMessage());
+        logError('Lỗi đăng xuất: ' . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi xử lý'], 500);
     }
 }

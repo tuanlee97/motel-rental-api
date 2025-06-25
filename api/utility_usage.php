@@ -192,7 +192,7 @@ function createUtilityUsage() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi nhập số điện, nước: " . $e->getMessage());
+        logError("Lỗi nhập số điện, nước: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -361,7 +361,7 @@ function updateUtilityUsage($usage_id) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi cập nhật số điện, nước: " . $e->getMessage());
+        logError("Lỗi cập nhật số điện, nước: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -661,7 +661,7 @@ function createBulkUtilityUsage() {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi nhập hàng loạt số điện, nước: " . $e->getMessage());
+        logError("Lỗi nhập hàng loạt số điện, nước: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()], 500);
     }
 }
@@ -760,7 +760,7 @@ function getUtilityUsage() {
             ]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy danh sách số điện, nước: " . $e->getMessage());
+        logError("Lỗi lấy danh sách số điện, nước: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -835,7 +835,7 @@ function deleteUtilityUsage($usage_id) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("Lỗi xóa số điện, nước: " . $e->getMessage());
+        logError("Lỗi xóa số điện, nước: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -909,7 +909,7 @@ function getLatestUtilityReading() {
             ] : ['new_reading' => 0]
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy new_reading gần nhất: " . $e->getMessage());
+        logError("Lỗi lấy new_reading gần nhất: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -996,7 +996,7 @@ function getUtilityUsageSummary() {
             'data' => $summary
         ]);
     } catch (PDOException $e) {
-        error_log("Lỗi lấy tổng hợp số điện, nước: " . $e->getMessage());
+        logError("Lỗi lấy tổng hợp số điện, nước: " . $e->getMessage());
         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
     }
 }
@@ -1051,7 +1051,7 @@ function getUtilityUsageSummary() {
 //                 'data' => $usage
 //             ]);
 //         } catch (PDOException $e) {
-//             error_log("Lỗi lấy chi tiết số điện, nước: " . $e->getMessage());
+//             logError("Lỗi lấy chi tiết số điện, nước: " . $e->getMessage());
 //             responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
 //         }
 //         return;
@@ -1137,7 +1137,7 @@ function getUtilityUsageSummary() {
 //             ]
 //         ]);
 //     } catch (PDOException $e) {
-//         error_log("Lỗi lấy danh sách số điện, nước: " . $e->getMessage());
+//         logError("Lỗi lấy danh sách số điện, nước: " . $e->getMessage());
 //         responseJson(['status' => 'error', 'message' => 'Lỗi cơ sở dữ liệu'], 500);
 //     }
 // }
