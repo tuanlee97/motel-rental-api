@@ -37,9 +37,9 @@ function sanitizeInput($input) {
     // Xử lý HTML đặc biệt
     $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
 
-    if (!$input) {
-        responseJson(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ'], 400);
-    }
+    // if (!$input) {
+    //     responseJson(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ'], 400);
+    // }
     return $input;
 }
 
