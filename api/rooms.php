@@ -401,7 +401,7 @@ function changeRoom() {
     $contract_id = (int)$data['contract_id'];
     $new_room_id = (int)$data['new_room_id'];
     $branch_id = (int)$data['branch_id'];
-
+    $data['deposit'] = validateOutRange($data['deposit'], 'Tiền đặt cọc');
     try {
         // Lấy thông tin hợp đồng hiện tại
         $stmt = $pdo->prepare("

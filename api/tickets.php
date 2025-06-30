@@ -360,7 +360,8 @@ function updateTicket($id) {
         responseJson(['status' => 'error', 'message' => 'Thiếu trạng thái, mức độ ưu tiên hoặc phòng để cập nhật'], 400);
         return;
     }
-
+    $subject = isset($data['subject']) ? trim(sanitizeInput($data['subject'])) : null;
+    $description = isset($data['description']) ? trim(sanitizeInput($data['description'])) : null;
     $status = isset($data['status']) ? trim(sanitizeInput($data['status'])) : null;
     $priority = isset($data['priority']) ? trim(sanitizeInput($data['priority'])) : null;
     $room_id = isset($data['room_id']) ? (int)$data['room_id'] : null;
@@ -446,6 +447,16 @@ function updateTicket($id) {
     // Build update query
     $updateFields = [];
     $params = [];
+
+    if ($subject) {
+        $updateFields[] = "subject = ?";
+        $params[] = $subject;
+    }
+    
+    if ($description) {
+        $updateFields[] = "description = ?";
+        $params[] = $description;
+    }
 
     if ($status) {
         $updateFields[] = "status = ?";

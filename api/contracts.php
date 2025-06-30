@@ -167,7 +167,7 @@ function createContract() {
     $input = json_decode(file_get_contents('php://input'), true);
     validateRequiredFields($input, ['room_id', 'user_id', 'start_date', 'end_date', 'branch_id']);
     $data = sanitizeInput($input);
-
+    $data['deposit'] = validateOutRange($data['deposit'], 'Tiền đặt cọc');
     try {
         // Kiểm tra quyền truy cập
         checkResourceExists($pdo, 'rooms', $data['room_id']);
@@ -220,6 +220,7 @@ function createContract() {
             (room_id, user_id, start_date, end_date, status, created_at, created_by, branch_id, deposit) 
             VALUES (?, ?, ?, ?, 'active', NOW(), ?, ?, ?)
         ");
+        
         $stmt->execute([
             $data['room_id'],
             $data['user_id'],
@@ -260,6 +261,7 @@ function updateContract() {
     $input = json_decode(file_get_contents('php://input'), true);
     validateRequiredFields($input, ['id', 'room_id', 'user_id', 'start_date', 'end_date', 'branch_id']);
     $data = sanitizeInput($input);
+    $data['deposit'] = validateOutRange($data['deposit'], 'Tiền đặt cọc');
     if (!in_array($data['status'], ['active'])) {
         responseJson(['status' => 'error', 'message' => 'Trạng thái phòng không hợp lệ'], 400);
         return;

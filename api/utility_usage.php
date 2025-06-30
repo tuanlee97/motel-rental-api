@@ -27,6 +27,7 @@ function createUtilityUsage() {
     $old_reading = (float)$data['old_reading'];
     $new_reading = (float)$data['new_reading'];
     $usage_amount = $new_reading - $old_reading;
+    validateOutRange($usage_amount, 'Số lượng sử dụng');
     $record_date = $data['record_date'];
 
     // Kiểm tra định dạng tháng (YYYY-MM)

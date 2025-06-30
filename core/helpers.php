@@ -73,4 +73,18 @@ function checkRateLimit($ip) {
     $data[$ip]['count']++;
     file_put_contents($cacheFile, json_encode($data));
 }
+function validateOutRange($value, $case = 'Giá trị') {
+    if (!is_numeric($value)) {
+        responseJson(['status' => 'error', 'message' => "$case phải là một số hợp lệ"], 400);
+    }
+
+    $value = round(floatval($value), 2);
+
+    if ($value < 0 || $value > 99999999.99) {
+        responseJson(['status' => 'error', 'message' => "Giá trị $case vượt quá giới hạn cho phép (tối đa 99,999,999.99)"], 400);
+    }
+
+    return $value;
+}
+
 ?>

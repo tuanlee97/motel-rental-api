@@ -227,7 +227,7 @@ function createInvoice() {
             $amount_due += $usage['usage_amount'] * $usage['price'];
         }
         $amount_due = round($amount_due);
-
+        validateOutRange($amount_due, 'Tổng tiền');
         // Tạo hóa đơn
         $stmt = $pdo->prepare("
             INSERT INTO invoices (contract_id, branch_id, amount, due_date, status, created_at)
@@ -613,7 +613,7 @@ function createBulkInvoices() {
                 $total_amount += $service_amount;
             }
             $total_amount = round($total_amount);
-
+            validateOutRange($total_amount, 'Tổng tiền');
             // Kiểm tra hóa đơn hiện có
             $stmt = $pdo->prepare("
                 SELECT id FROM invoices
