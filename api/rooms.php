@@ -283,6 +283,7 @@ function updateRoom() {
             $params[] = $data['name'];
         }
         if (isset($data['price'])) {
+            $data['price'] = validateOutRange($data['price'], 'Giá phòng');
             $setClause[] = "price = ?";
             $params[] = $data['price'] ?? 0;
         }

@@ -46,7 +46,7 @@ function handleApiRequest($method, $uri)
         "PUT:users/([0-9]+)" => [
             "file" => "../api/users.php",
             "handler" => "updateUser",
-            "middleware" => "auth:admin,owner,employee",
+            "middleware" => "auth:admin,owner,employee,customer",
         ],
         "PATCH:users/([0-9]+)" => [
             "file" => "../api/users.php",
