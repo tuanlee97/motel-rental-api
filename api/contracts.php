@@ -413,8 +413,8 @@ function deleteContract() {
         // Bắt đầu giao dịch
         $pdo->beginTransaction();
 
-        // 1. Cập nhật trạng thái hợp đồng thành 'deleted' và đánh dấu thời gian xóa
-        $stmt = $pdo->prepare("UPDATE contracts SET status = 'deleted', deleted_at = NOW() WHERE id = ?");
+        // 1. Cập nhật trạng thái hợp đồng thành 'ended' và đánh dấu thời gian xóa
+        $stmt = $pdo->prepare("UPDATE contracts SET status = 'ended', deleted_at = NOW() WHERE id = ?");
         $stmt->execute([$contract_id]);
 
         // 2. Cập nhật trạng thái phòng thành 'available'

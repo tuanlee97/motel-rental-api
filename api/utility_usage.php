@@ -28,19 +28,19 @@ function createUtilityUsage() {
     $new_reading = (float)$data['new_reading'];
     $usage_amount = $new_reading - $old_reading;
     validateOutRange($usage_amount, 'Số lượng sử dụng');
-    $record_date = $data['record_date'];
-
+    $record_date_raw = $data['record_date'];
+    $record_date = normalizeDateToTimestamp($record_date_raw, true);
     // Kiểm tra định dạng tháng (YYYY-MM)
     if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
         responseJson(['status' => 'error', 'message' => 'Định dạng tháng không hợp lệ (YYYY-MM)'], 400);
         return;
     }
 
-    // Kiểm tra định dạng record_date (YYYY-MM-DD)
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $record_date)) {
-        responseJson(['status' => 'error', 'message' => 'Định dạng ngày ghi nhận không hợp lệ (YYYY-MM-DD)'], 400);
-        return;
-    }
+    // // Kiểm tra định dạng record_date (YYYY-MM-DD)
+    // if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $record_date)) {
+    //     responseJson(['status' => 'error', 'message' => 'Định dạng ngày ghi nhận không hợp lệ (YYYY-MM-DD)'], 400);
+    //     return;
+    // }
 
     // Kiểm tra usage_amount, old_reading, new_reading
     if ($usage_amount < 0 || $old_reading < 0 || $new_reading < 0) {
@@ -220,17 +220,17 @@ function updateUtilityUsage($usage_id) {
     $old_reading = (float)$data['old_reading'];
     $new_reading = (float)$data['new_reading'];
     $usage_amount = $new_reading - $old_reading;
-    $record_date = $data['record_date'];
-
+    $record_date_raw = $data['record_date'];
+    $record_date = normalizeDateToTimestamp($record_date_raw, true);
     // Kiểm tra định dạng tháng và record_date
     if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
         responseJson(['status' => 'error', 'message' => 'Định dạng tháng không hợp lệ (YYYY-MM)'], 400);
         return;
     }
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $record_date)) {
-        responseJson(['status' => 'error', 'message' => 'Định dạng ngày ghi nhận không hợp lệ (YYYY-MM-DD)'], 400);
-        return;
-    }
+    // if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $record_date)) {
+    //     responseJson(['status' => 'error', 'message' => 'Định dạng ngày ghi nhận không hợp lệ (YYYY-MM-DD)'], 400);
+    //     return;
+    // }
 
     // Kiểm tra usage_amount, old_reading, new_reading
     if ($usage_amount < 0 || $old_reading < 0 || $new_reading < 0) {
@@ -468,7 +468,8 @@ function createBulkUtilityUsage() {
             $month = $data['month'];
             $old_reading = (float)$data['old_reading'];
             $new_reading = (float)$data['new_reading'];
-            $record_date = $data['record_date'];
+            $record_date_raw = $data['record_date'];
+            $record_date = normalizeDateToTimestamp($record_date_raw, true);
             $usage_amount = $new_reading - $old_reading;
 
             // Kiểm tra định dạng và giá trị

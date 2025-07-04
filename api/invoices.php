@@ -682,7 +682,7 @@ function updateInvoice($invoice_id) {
     $user_id = $user['user_id'];
     $role = $user['role'];
 
-    if (!in_array($role, ['owner', 'employee'])) {
+    if (!in_array($role, ['admin','owner', 'employee'])) {
         responseJson(['status' => 'error', 'message' => 'Không có quyền cập nhật hóa đơn'], 403);
         return;
     }
@@ -788,7 +788,7 @@ function updateInvoice($invoice_id) {
         // Cập nhật hóa đơn
         $stmt = $pdo->prepare("
             UPDATE invoices
-            SET amount = ?, due_date = ?, status = ?, created_at = NOW()
+            SET amount = ?, due_date = ?, status = ? 
             WHERE id = ?
         ");
         $stmt->execute([$amount_due, $due_date, $status, $invoice_id]);
