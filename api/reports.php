@@ -62,7 +62,7 @@ function getAllBranchesRevenueReport() {
 
     $invoice_query = "
         SELECT 
-            i.id, i.contract_id, CAST(i.amount AS DECIMAL(10,2)) AS amount, i.due_date, i.status, i.created_at,
+            i.id, i.contract_id, i.amount AS amount, i.due_date, i.status, i.created_at,
             c.user_id, u.username AS user_name, u.name AS customer_name, r.name AS room_name, b.name AS branch_name
         FROM invoices i
         JOIN contracts c ON i.contract_id = c.id
@@ -77,7 +77,7 @@ function getAllBranchesRevenueReport() {
     $monthly_query = "
         SELECT 
             DATE_FORMAT(i.created_at, '%Y-%m') AS name,
-            CAST(SUM(i.amount) AS DECIMAL(10,2)) AS total
+           SUM(i.amount) AS total
         FROM invoices i
         JOIN branches b ON i.branch_id = b.id
         $where_clause
@@ -87,7 +87,7 @@ function getAllBranchesRevenueReport() {
 
     try {
         // Tổng doanh thu
-        $total_stmt = $pdo->prepare("SELECT CAST(SUM(i.amount) AS DECIMAL(10,2)) AS total_revenue 
+        $total_stmt = $pdo->prepare("SELECT SUM(i.amount) AS total_revenue 
             FROM invoices i 
             JOIN branches b ON i.branch_id = b.id 
             $where_clause");
@@ -660,7 +660,7 @@ function getRevenueReport($branchId) {
 
     $invoice_query = "
         SELECT 
-            i.id, i.contract_id, CAST(i.amount AS DECIMAL(10,2)) AS amount, i.due_date, i.status, i.created_at,
+            i.id, i.contract_id, i.amount AS amount, i.due_date, i.status, i.created_at,
             c.user_id, u.username AS user_name, u.name AS customer_name, r.name AS room_name
         FROM invoices i
         JOIN contracts c ON i.contract_id = c.id
@@ -674,7 +674,7 @@ function getRevenueReport($branchId) {
     $monthly_query = "
         SELECT 
             DATE_FORMAT(i.created_at, '%Y-%m') AS name,
-            CAST(SUM(i.amount) AS DECIMAL(10,2)) AS total
+            SUM(i.amount) AS total
         FROM invoices i
         $where_clause
         GROUP BY DATE_FORMAT(i.created_at, '%Y-%m')
@@ -683,7 +683,7 @@ function getRevenueReport($branchId) {
 
     try {
         // Tổng doanh thu
-        $total_stmt = $pdo->prepare("SELECT CAST(SUM(i.amount) AS DECIMAL(10,2)) AS total_revenue FROM invoices i $where_clause");
+        $total_stmt = $pdo->prepare("SELECT SUM(i.amount) AS total_revenue FROM invoices i $where_clause");
         $total_stmt->execute($params);
         $total_revenue = (float)$total_stmt->fetchColumn() ?? 0;
 
@@ -1165,7 +1165,7 @@ function getAssignedBranchesRevenueReport($employeeId) {
 
     $invoice_query = "
         SELECT 
-            i.id, i.contract_id, CAST(i.amount AS DECIMAL(10,2)) AS amount, i.due_date, i.status, i.created_at,
+            i.id, i.contract_id, i.amount AS amount, i.due_date, i.status, i.created_at,
             c.user_id, u.username AS user_name, u.name AS customer_name, r.name AS room_name, b.name AS branch_name
         FROM invoices i
         JOIN contracts c ON i.contract_id = c.id
@@ -1180,7 +1180,7 @@ function getAssignedBranchesRevenueReport($employeeId) {
     $monthly_query = "
         SELECT 
             DATE_FORMAT(i.created_at, '%Y-%m') AS name,
-            CAST(SUM(i.amount) AS DECIMAL(10,2)) AS total
+            SUM(i.amount) AS total
         FROM invoices i
         JOIN branches b ON i.branch_id = b.id
         $where_clause
@@ -1190,7 +1190,7 @@ function getAssignedBranchesRevenueReport($employeeId) {
 
     try {
         // Tổng doanh thu
-        $total_stmt = $pdo->prepare("SELECT CAST(SUM(i.amount) AS DECIMAL(10,2)) AS total_revenue 
+        $total_stmt = $pdo->prepare("SELECT SUM(i.amount) AS total_revenue 
             FROM invoices i 
             JOIN branches b ON i.branch_id = b.id 
             $where_clause");
@@ -1812,7 +1812,7 @@ function getCustomerInvoices($customerId) {
 
     $query = "
         SELECT 
-            i.id, i.contract_id, CAST(i.amount AS DECIMAL(10,2)) AS amount, i.due_date, i.status, i.created_at,
+            i.id, i.contract_id, i.amount AS amount, i.due_date, i.status, i.created_at,
             r.name AS room_name, b.name AS branch_name
         FROM invoices i
         JOIN contracts c ON i.contract_id = c.id
@@ -1831,7 +1831,7 @@ function getCustomerInvoices($customerId) {
                 SUM(CASE WHEN i.status = 'pending' THEN 1 ELSE 0 END) AS pending_invoices,
                 SUM(CASE WHEN i.status = 'paid' THEN 1 ELSE 0 END) AS paid_invoices,
                 SUM(CASE WHEN i.status = 'overdue' THEN 1 ELSE 0 END) AS overdue_invoices,
-                CAST(SUM(i.amount) AS DECIMAL(10,2)) AS total_amount
+                SUM(i.amount) AS total_amount
             FROM invoices i
             JOIN contracts c ON i.contract_id = c.id
             WHERE c.user_id = ? AND i.deleted_at IS NULL
@@ -1989,7 +1989,7 @@ function getCustomerInvoiceDetails($customerId, $invoiceId) {
         // Kiểm tra hóa đơn thuộc khách hàng
         $stmt = $pdo->prepare("
             SELECT 
-                i.id, i.contract_id, CAST(i.amount AS DECIMAL(10,2)) AS amount, i.due_date, i.status, i.created_at,
+                i.id, i.contract_id, i.amount AS amount, i.due_date, i.status, i.created_at,
                 r.name AS room_name, b.name AS branch_name, c.start_date, c.end_date
             FROM invoices i
             JOIN contracts c ON i.contract_id = c.id
